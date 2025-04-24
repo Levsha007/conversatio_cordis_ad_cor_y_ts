@@ -1,0 +1,66 @@
+# Dependency directories
+/node_modules
+/.pnp
+.pnp.js
+.pnp.cjs
+
+# Build artifacts
+/build
+/dist
+/.out
+.next/  # Если не используете Next.js, можно оставить
+
+# Cache directories
+/.cache
+/.turbo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+logs/
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# TypeScript/JavaScript
+*.tsbuildinfo
+jsconfig.json
+
+# Testing
+/coverage
+/.nyc_output
+
+# Debug
+debug/
+*.pid
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VSCode
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
