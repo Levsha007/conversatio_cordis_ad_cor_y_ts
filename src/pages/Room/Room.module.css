@@ -1,0 +1,310 @@
+.roomContainer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    height: 100vh;
+    background-color: #000;
+    position: relative;
+}
+
+.videoWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background-color: transparent;
+}
+
+.videoLocalHidden {
+    background-color: #000 !important;
+}
+
+.userLabel {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+}
+
+.controlButton {
+    padding: 10px;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+}
+
+.controlButtonMicOn {
+    background: #4CAF50;
+}
+
+.controlButtonMicOff {
+    background: #f44336;
+}
+
+.controlButtonCamOn {
+    background: #4CAF50;
+}
+
+.controlButtonCamOff {
+    background: #f44336;
+}
+
+.controlButtonChat {
+    background: #555;
+}
+
+.controlButtonChatActive {
+    background: #2196F3;
+}
+
+.controlButtonSettings {
+    background: #555;
+}
+
+.controlButtonSettingsActive {
+    background: #FF9800;
+}
+
+.controlButtonLeave {
+    background: #f44336;
+}
+
+.chatContainer {
+    position: fixed;
+    right: 20px;
+    bottom: 80px;
+    width: 300px;
+    height: 400px;
+    background-color: white;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.chatHeader {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chatCloseButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.chatMessages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.noMessages {
+    color: #999;
+    text-align: center;
+    margin-top: 50%;
+}
+
+.message {
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+.messageLocal {
+    text-align: right;
+}
+
+.messageBubble {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 15px;
+    max-width: 80%;
+    word-break: break-word;
+}
+
+.messageBubbleLocal {
+    background: #DCF8C6;
+}
+
+.messageBubbleRemote {
+    background: #ECECEC;
+}
+
+.messageTime {
+    font-size: 0.7em;
+    color: #999;
+    margin-top: 3px;
+}
+
+.chatInputContainer {
+    padding: 10px;
+    border-top: 1px solid #eee;
+    display: flex;
+}
+
+.chatInput {
+    flex: 1;
+    padding: 10px;
+    border-radius: 20px;
+    border: 1px solid #ddd;
+    outline: none;
+    font-size: 0.9rem;
+}
+
+.chatSendButton {
+    margin-left: 10px;
+    padding: 0 15px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.chatSendButtonDisabled {
+    opacity: 0.5;
+}
+
+.settingsPanel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: white;
+    border-radius: 10px;
+    padding: 15px;
+    z-index: 100;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    min-width: 250px;
+}
+
+.settingsHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.settingsCloseButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.settingsSection {
+    margin-bottom: 15px;
+}
+
+.settingsLabel {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.settingsSelect {
+    width: 100%;
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+.errorOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    z-index: 10;
+    background-color: rgba(0,0,0,0.7);
+    text-align: center;
+    padding: 20px;
+}
+
+.errorTitle {
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.errorDescription {
+    max-width: 80%;
+    white-space: pre-line;
+    margin-bottom: 20px;
+}
+
+.retryButton {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s;
+}
+
+.retryButton:hover {
+    background-color: #45a049;
+}
+
+@media (max-width: 767px) {
+    .roomContainer {
+        flex-direction: column;
+        flex-wrap: nowrap;
+    }
+    
+    .chatContainer {
+        right: 10px;
+        bottom: 70px;
+        width: calc(100% - 20px);
+        height: 40%;
+    }
+    
+    .videoWrapper {
+        width: 100% !important;
+        height: auto;
+        min-height: 100px;
+    }
+}
