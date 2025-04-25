@@ -96,7 +96,7 @@ io.on('connection', (socket: Socket) => {
       roomChats.set(roomID, []);
     }
 
-    socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID));
+    socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
     shareRoomsInfo();
   });
 
@@ -110,7 +110,7 @@ io.on('connection', (socket: Socket) => {
     if (realRooms.length === 0) return;
 
     realRooms.forEach(roomID => {
-      const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || [];
+      const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
       
       clients.forEach(clientID => {
         io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
@@ -161,7 +161,7 @@ io.on('connection', (socket: Socket) => {
 
   socket.on(ACTIONS.REQUEST_CHAT_HISTORY, ({ roomID }: { roomID: string }) => {
     if (roomChats.has(roomID)) {
-      socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID));
+      socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
     } else {
       socket.emit(ACTIONS.CHAT_HISTORY, []);
     }
@@ -203,7 +203,7 @@ io.on('connection', (socket: Socket) => {
     iceCandidate 
   }: { 
     peerID: string; 
-    iceCandidate: RTCIceCandidate 
+    iceCandidate: RTCIceCandidateInit 
   }) => {
     io.to(peerID).emit(ACTIONS.ICE_CANDIDATE, {
       peerID: socket.id,
