@@ -3,7 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
-import { ACTIONS } from './src/socket/actions';
+import { ACTIONS } from './socket/actions';
 
 interface ChatMessage {
   id: string;
