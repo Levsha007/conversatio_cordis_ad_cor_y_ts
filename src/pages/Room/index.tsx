@@ -8,7 +8,6 @@ import styles from './Room.module.css';
 interface LayoutItem {
   width: string;
   height: string;
-  minHeight?: string;
 }
 
 interface ChatMessage {
@@ -35,44 +34,31 @@ const useIsMobile = (): boolean => {
   return isMobile;
 };
 
-function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
-  if (isMobile) {
-    return Array.from({ length: clientsCount }).map(() => ({
-      width: '100%',
-      height: `${100 / clientsCount}%`,
-      minHeight: `${100 / clientsCount}%`
-    }));
-  }
+function calculateLayout(clientsCount: number = 1): LayoutItem[] {
+  const pairs = Array.from({ length: clientsCount })
+    .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
+      if (index % 2 === 0) {
+        acc.push(arr.slice(index, index + 2) as undefined[]);
+      }
+      return acc;
+    }, []);
 
-  switch (clientsCount) {
-    case 1:
-      return [{ width: '100%', height: '100%' }];
-    case 2:
-      return [
-        { width: '50%', height: '100%' },
-        { width: '50%', height: '100%' }
-      ];
-    case 3:
-      return [
-        { width: '33.33%', height: '100%' },
-        { width: '33.33%', height: '100%' },
-        { width: '33.33%', height: '100%' }
-      ];
-    case 4:
-      return [
-        { width: '50%', height: '50%' },
-        { width: '50%', height: '50%' },
-        { width: '50%', height: '50%' },
-        { width: '50%', height: '50%' }
-      ];
-    default:
-      const columns = Math.ceil(Math.sqrt(clientsCount));
-      const rows = Math.ceil(clientsCount / columns);
-      return Array.from({ length: clientsCount }).map(() => ({
-        width: `${100 / columns}%`,
-        height: `${100 / rows}%`
-      }));
-  }
+  const rowsNumber = pairs.length;
+  const height = `${100 / rowsNumber}%`;
+
+  return pairs.map((row, index, arr) => {
+    if (index === arr.length - 1 && row.length === 1) {
+      return [{
+        width: '100%',
+        height,
+      }];
+    }
+
+    return row.map(() => ({
+      width: '50%',
+      height,
+    }));
+  }).flat();
 }
 
 const Room: React.FC = () => {
@@ -93,7 +79,7 @@ const Room: React.FC = () => {
     getChatMessages
   } = useWebRTC(roomID || '');
   
-  const videoLayout = calculateLayout(clients.length, isMobile);
+  const videoLayout = calculateLayout(clients.length);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
   const [messageInput, setMessageInput] = useState('');
@@ -240,10 +226,7 @@ const Room: React.FC = () => {
         <div 
           key={`${clientID}-${retryCount}`}
           className={styles.videoWrapper}
-          style={{
-            ...videoLayout[index],
-            aspectRatio: '16/9'
-          }}
+          style={videoLayout[index]}
         >
           <video
             ref={instance => provideMediaRef(clientID, instance)}

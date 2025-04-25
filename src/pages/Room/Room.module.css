@@ -1,27 +1,23 @@
 .roomContainer {
     display: flex;
-    flex-direction: row;
     flex-wrap: wrap;
     height: 100vh;
     background-color: #000;
-    position: relative;
 }
 
 .videoWrapper {
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     position: relative;
     overflow: hidden;
-    box-sizing: border-box;
-    background-color: #000; /* Добавляем чёрный фон */
+    background-color: #000;
 }
 
 .video {
-    width: auto;
+    width: 100%;
     height: 100%;
-    max-width: 100%;
-    object-fit: contain; /* Меняем cover на contain */
+    object-fit: contain;
 }
 
 .videoLocalHidden {
@@ -305,13 +301,12 @@
     
     .videoWrapper {
         width: 100% !important;
-        height: auto;
-        min-height: 100px;
+        height: auto !important;
+        aspect-ratio: 16/9;
     }
-
+    
     .video {
         width: 100%;
         height: auto;
-        max-height: 100%;
     }
 }
