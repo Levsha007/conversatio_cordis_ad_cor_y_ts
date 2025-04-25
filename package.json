@@ -23,7 +23,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "ts-node server.ts",
     "start:dev-server": "nodemon --exec ts-node server.ts",
     "build": "react-scripts build",
     "test": "react-scripts test",
