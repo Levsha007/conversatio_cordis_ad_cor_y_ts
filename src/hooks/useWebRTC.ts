@@ -40,6 +40,8 @@ interface UseWebRTCReturn {
     availableDevices: AvailableDevices;
     addChatMessage: (message: ChatMessage) => void;
     getChatMessages: () => ChatMessage[];
+    startMediaStream: () => Promise<MediaStream | null>;
+    peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
 }
 
 function checkWebRTCAvailability(): WebRTCStatus {
@@ -133,6 +135,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             const { isSupported, errors } = checkWebRTCAvailability();
             if (!isSupported) {
                 throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
+            }
+
+            if (localMediaStream.current) {
+                localMediaStream.current.getTracks().forEach(track => track.stop());
+                localMediaStream.current = null;
             }
 
             const stream = await navigator.mediaDevices.getUserMedia(
@@ -451,6 +458,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         switchMediaDevice,
         availableDevices,
         addChatMessage,
-        getChatMessages
+        getChatMessages,
+        startMediaStream,
+        peerMediaElements
     };
 }
