@@ -1,6 +1,13 @@
 import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
 import { ACTIONS } from './actions';
 
+interface ChatMessage {
+  id: string;
+  sender: string;
+  message: string;
+  timestamp: string;
+}
+
 type CustomSocketOptions = Partial<ManagerOptions & SocketOptions> & {
   "force new connection"?: boolean;
 };

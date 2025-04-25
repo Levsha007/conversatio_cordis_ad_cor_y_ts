@@ -404,7 +404,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             });
         };
 
-        const handlers = {
+        const handlers: Record<string, (...args: any[]) => void> = {
             [ACTIONS.ADD_PEER]: handleAddPeer,
             [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
             [ACTIONS.ICE_CANDIDATE]: handleIceCandidate,
@@ -413,14 +413,18 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             [ACTIONS.CHAT_MESSAGE]: handleChatMessage
         };
 
-        Object.entries(handlers).forEach(([action, handler]) => {
-            socket.on(action, handler);
-        });
+        (Object.entries(handlers) as [keyof typeof ACTIONS, (...args: any[]) => void][]).forEach(
+            ([action, handler]) => {
+                socket.on(action as any, handler);
+            }
+        );
 
         return () => {
-            Object.entries(handlers).forEach(([action, handler]) => {
-                socket.off(action, handler);
-            });
+            (Object.entries(handlers) as [keyof typeof ACTIONS, (...args: any[]) => void][]).forEach(
+                ([action, handler]) => {
+                    socket.off(action as any, handler);
+                }
+            );
         };
     }, [setupPeerConnection, updateClients, addChatMessage]);
 

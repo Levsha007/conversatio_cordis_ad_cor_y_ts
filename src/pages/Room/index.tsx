@@ -108,7 +108,7 @@ const Room: React.FC = () => {
         text: messageInput,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
-        sender: socket.id
+        sender: socket.id || 'unknown' // Добавлено fallback значение
       };
       
       addChatMessage(newMessage);
@@ -137,6 +137,11 @@ const Room: React.FC = () => {
       sender: string;
       timestamp: string;
     }) => {
+      if (!msg.sender) {
+        console.warn('Received message without sender:', msg);
+        return;
+      }
+
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         return [...prev, {
@@ -149,13 +154,13 @@ const Room: React.FC = () => {
       });
     };
 
-    socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
+    socket.on(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
 
     return () => {
-      socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
+      socket.off(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
     };
   }, [roomID]);
 
@@ -178,6 +183,7 @@ const Room: React.FC = () => {
       alert(errorMessage);
     }
   }, [mediaError, webRTCStatus, retryCount]);
+
 
   return (
     <div className={styles.roomContainer}>
