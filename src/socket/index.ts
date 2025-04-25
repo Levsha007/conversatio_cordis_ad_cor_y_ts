@@ -51,7 +51,7 @@ interface ClientToServerEvents {
 }
 
 const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
-  "https://conversatio-cordis-ad-cor.onrender.com", 
+  "https://conversatio-cordis-ad-cor-y-ts.onrender.com", 
   {
     ...options,
     transports: ["websocket", "polling"]

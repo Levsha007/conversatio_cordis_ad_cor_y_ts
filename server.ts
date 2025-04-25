@@ -17,7 +17,7 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor.vercel.app",
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app",
       "http://localhost:3000"
     ],
     methods: ["GET", "POST"],
