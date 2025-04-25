@@ -14,13 +14,14 @@
     position: relative;
     overflow: hidden;
     box-sizing: border-box;
+    background-color: #000; /* Добавляем чёрный фон */
 }
 
 .video {
-    width: 100%;
+    width: auto;
     height: 100%;
-    object-fit: cover;
-    background-color: transparent;
+    max-width: 100%;
+    object-fit: contain; /* Меняем cover на contain */
 }
 
 .videoLocalHidden {
@@ -306,5 +307,11 @@
         width: 100% !important;
         height: auto;
         min-height: 100px;
+    }
+
+    .video {
+        width: 100%;
+        height: auto;
+        max-height: 100%;
     }
 }

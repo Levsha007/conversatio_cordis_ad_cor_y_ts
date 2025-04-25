@@ -44,22 +44,35 @@ function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutIte
     }));
   }
 
-  if (clientsCount === 1) return [{ width: '100%', height: '100%' }];
-  if (clientsCount === 2) return [
-    { width: '50%', height: '100%' },
-    { width: '50%', height: '100%' }
-  ];
-  if (clientsCount === 3) return [
-    { width: '50%', height: '50%' },
-    { width: '50%', height: '50%' },
-    { width: '100%', height: '50%' }
-  ];
-
-  const pairs = Array.from({ length: Math.ceil(clientsCount / 2) });
-  return pairs.flatMap((_, rowIndex) => [
-    { width: '50%', height: `${100 / pairs.length}%` },
-    { width: '50%', height: `${100 / pairs.length}%` }
-  ]).slice(0, clientsCount);
+  switch (clientsCount) {
+    case 1:
+      return [{ width: '100%', height: '100%' }];
+    case 2:
+      return [
+        { width: '50%', height: '100%' },
+        { width: '50%', height: '100%' }
+      ];
+    case 3:
+      return [
+        { width: '33.33%', height: '100%' },
+        { width: '33.33%', height: '100%' },
+        { width: '33.33%', height: '100%' }
+      ];
+    case 4:
+      return [
+        { width: '50%', height: '50%' },
+        { width: '50%', height: '50%' },
+        { width: '50%', height: '50%' },
+        { width: '50%', height: '50%' }
+      ];
+    default:
+      const columns = Math.ceil(Math.sqrt(clientsCount));
+      const rows = Math.ceil(clientsCount / columns);
+      return Array.from({ length: clientsCount }).map(() => ({
+        width: `${100 / columns}%`,
+        height: `${100 / rows}%`
+      }));
+  }
 }
 
 const Room: React.FC = () => {
@@ -108,7 +121,7 @@ const Room: React.FC = () => {
         text: messageInput,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
-        sender: socket.id || 'unknown' // Добавлено fallback значение
+        sender: socket.id || 'unknown'
       };
       
       addChatMessage(newMessage);
@@ -184,7 +197,6 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
-
   return (
     <div className={styles.roomContainer}>
       {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
@@ -228,7 +240,10 @@ const Room: React.FC = () => {
         <div 
           key={`${clientID}-${retryCount}`}
           className={styles.videoWrapper}
-          style={videoLayout[index]}
+          style={{
+            ...videoLayout[index],
+            aspectRatio: '16/9'
+          }}
         >
           <video
             ref={instance => provideMediaRef(clientID, instance)}
