@@ -5,11 +5,13 @@ import socket from "../../socket";
 import ACTIONS from "../../socket/actions";
 import styles from './Main.module.css';
 
+// Пропсы для компонента списка комнат
 interface RoomListProps {
-  rooms: string[];
-  onJoinRoom: (roomID: string) => void;
+  rooms: string[]; // Массив ID комнат
+  onJoinRoom: (roomID: string) => void; // Обработчик входа в комнату
 }
 
+// Компонент отображения списка доступных комнат
 const RoomList: React.FC<RoomListProps> = ({ rooms, onJoinRoom }) => (
   <div className={styles.roomsList}>
     {rooms.map(roomID => (
@@ -26,6 +28,7 @@ const RoomList: React.FC<RoomListProps> = ({ rooms, onJoinRoom }) => (
   </div>
 );
 
+// Компонент с инструкцией по использованию
 const HowItWorks: React.FC = () => (
   <div className={styles.infoBox}>
     <h3 className={styles.infoTitle}>How it works:</h3>
@@ -37,37 +40,44 @@ const HowItWorks: React.FC = () => (
   </div>
 );
 
+// Основной компонент главной страницы
 const Main: React.FC = () => {
     const navigate = useNavigate();
-    const [rooms, setRooms] = useState<string[]>([]);
-    const rootNode = useRef<HTMLDivElement>(null);
+    const [rooms, setRooms] = useState<string[]>([]); // Состояние списка комнат
+    const rootNode = useRef<HTMLDivElement>(null); // Ref для корневого элемента
 
     useEffect(() => {
+        // Обработчик обновления списка комнат
         const handleRoomsUpdate = ({ rooms = [] }: { rooms?: string[] } = {}) => {
             if (rootNode.current) {
                 setRooms(rooms);
             }
         };
 
+        // Подписка на события сокета
         socket.on(ACTIONS.SHARE_ROOMS, handleRoomsUpdate);
-        socket.emit(ACTIONS.GET_ROOMS);
+        socket.emit(ACTIONS.GET_ROOMS); // Запрос списка комнат
 
+        // Обработчик ошибки подключения
         socket.on('connect_error', (err: Error) => {
             console.error('Connection error:', err);
         });
 
+        // Отписка от событий при размонтировании
         return () => {
             socket.off(ACTIONS.SHARE_ROOMS, handleRoomsUpdate);
             socket.off('connect_error');
         };
     }, []);
 
+    // Обработчик входа в существующую комнату
     const handleJoinRoom = (roomID: string) => {
         navigate(`/room/${roomID}`);
     };
 
+    // Обработчик создания новой комнаты
     const handleCreateRoom = () => {
-        navigate(`/room/${v4()}`);
+        navigate(`/room/${v4()}`); // Генерация уникального ID комнаты
     };
 
     return (

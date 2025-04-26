@@ -3,47 +3,51 @@ import useStateWithCallback from './useStateWithCallback';
 import socket from '../socket';
 import { ACTIONS } from '../socket/actions';
 
+// Константа для идентификации локального видео потока
 export const LOCAL_VIDEO = 'LOCAL_VIDEO';
 
+// Интерфейсы для типизации возвращаемых значений и состояний
 interface WebRTCStatus {
-    isSupported: boolean;
-    errors: string[];
+    isSupported: boolean;  // Флаг поддержки WebRTC
+    errors: string[];      // Список ошибок (если не поддерживается)
 }
 
 interface MediaState {
-    audio: boolean;
-    video: boolean;
+    audio: boolean;  // Состояние аудио (вкл/выкл)
+    video: boolean;  // Состояние видео (вкл/выкл)
 }
 
 interface AvailableDevices {
-    audio: MediaDeviceInfo[];
-    video: MediaDeviceInfo[];
+    audio: MediaDeviceInfo[];  // Доступные аудио устройства
+    video: MediaDeviceInfo[];  // Доступные видео устройства
 }
 
 interface ChatMessage {
-    id: string;
-    text: string;
-    isLocal: boolean;
-    timestamp: string;
-    sender: string;
+    id: string;         // Уникальный ID сообщения
+    text: string;       // Текст сообщения
+    isLocal: boolean;   // Флаг локального сообщения
+    timestamp: string;  // Временная метка
+    sender: string;     // ID отправителя
 }
 
+// Интерфейс возвращаемых хуком значений
 interface UseWebRTCReturn {
-    clients: string[];
+    clients: string[];  // Список ID подключенных клиентов
     provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
-    mediaError: Error | null;
-    isMediaReady: boolean;
-    webRTCStatus: WebRTCStatus;
-    mediaState: MediaState;
-    toggleMedia: (type: 'audio' | 'video') => void;
+    mediaError: Error | null;      // Ошибка медиа потока
+    isMediaReady: boolean;         // Флаг готовности медиа
+    webRTCStatus: WebRTCStatus;    // Статус WebRTC
+    mediaState: MediaState;        // Текущее состояние медиа
+    toggleMedia: (type: 'audio' | 'video') => void;  // Переключение медиа
     switchMediaDevice: (type: 'audio' | 'video', deviceId?: string) => Promise<boolean>;
-    availableDevices: AvailableDevices;
-    addChatMessage: (message: ChatMessage) => void;
-    getChatMessages: () => ChatMessage[];
+    availableDevices: AvailableDevices;  // Доступные устройства
+    addChatMessage: (message: ChatMessage) => void;  // Добавление сообщения
+    getChatMessages: () => ChatMessage[];  // Получение сообщений
     peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
-    reconnect: () => Promise<void>;
+    reconnect: () => Promise<void>;  // Переподключение
 }
 
+// Проверка доступности WebRTC в браузере
 function checkWebRTCAvailability(): WebRTCStatus {
     const errors: string[] = [];
     
@@ -66,7 +70,9 @@ function checkWebRTCAvailability(): WebRTCStatus {
     };
 }
 
+// Основной хук для работы с WebRTC
 export default function useWebRTC(roomID?: string): UseWebRTCReturn {
+    // Состояния хука
     const [clients, updateClients] = useStateWithCallback<string[]>([]);
     const [mediaError, setMediaError] = useState<Error | null>(null);
     const [isMediaReady, setIsMediaReady] = useState(false);
@@ -83,6 +89,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         video: []
     });
     
+    // Рефы для хранения мутируемых значений между рендерами
     const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
     const localMediaStream = useRef<MediaStream | null>(null);
     const peerMediaElements = useRef<Record<string, HTMLVideoElement | null>>({
@@ -90,11 +97,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     });
     const chatMessages = useRef<ChatMessage[]>([]);
 
+    // STUN сервера для установки P2P соединений
     const iceServers = useRef<RTCIceServer[]>([
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' }
     ]);
 
+    // Добавление нового клиента в список
     const addNewClient = useCallback((newClient: string, cb?: () => void) => {
         updateClients(list => {
             if (!list.includes(newClient)) {
@@ -104,17 +113,19 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }, cb);
     }, [updateClients]);
 
+    // Получение ограничений для медиа потока
     const getMediaConstraints = useCallback((): MediaStreamConstraints => {
         return {
             audio: true,
             video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
+                width: { ideal: 1280 },  // Идеальная ширина
+                height: { ideal: 720 },   // Идеальная высота
+                frameRate: { ideal: 30 }  // Идеальная частота кадров
             }
         };
     }, []);
 
+    // Получение списка доступных устройств
     const enumerateDevices = useCallback(async (): Promise<void> => {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -127,6 +138,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
     }, []);
 
+    // Запуск медиа потока (аудио/видео)
     const startMediaStream = useCallback(async (): Promise<MediaStream | null> => {
         setMediaError(null);
         setIsMediaReady(false);
@@ -137,11 +149,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
                 throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
             }
 
+            // Остановка предыдущего потока, если есть
             if (localMediaStream.current) {
                 localMediaStream.current.getTracks().forEach(track => track.stop());
                 localMediaStream.current = null;
             }
 
+            // Запрос доступа к медиа устройствам
             const stream = await navigator.mediaDevices.getUserMedia(
                 getMediaConstraints()
             );
@@ -156,22 +170,28 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
     }, [getMediaConstraints, enumerateDevices]);
 
+    // Переподключение с полной переинициализацией
     const reconnect = useCallback(async () => {
         try {
+            // Закрытие всех существующих соединений
             Object.values(peerConnections.current).forEach(pc => pc.close());
             peerConnections.current = {};
             
+            // Остановка текущего медиа потока
             if (localMediaStream.current) {
                 localMediaStream.current.getTracks().forEach(track => track.stop());
                 localMediaStream.current = null;
             }
 
+            // Сброс списка клиентов
             updateClients([], () => {});
 
+            // Запуск нового медиа потока
             const stream = await startMediaStream();
             if (!stream) return;
 
             localMediaStream.current = stream;
+            // Добавление локального видео
             addNewClient(LOCAL_VIDEO, () => {
                 const localVideo = peerMediaElements.current[LOCAL_VIDEO];
                 if (localVideo) {
@@ -180,6 +200,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
                 }
             });
 
+            // Повторное подключение к комнате
             if (roomID) {
                 socket.emit(ACTIONS.JOIN, { room: roomID });
             }
@@ -189,10 +210,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
     }, [roomID, startMediaStream, addNewClient, updateClients]);
 
+    // Переключение состояния медиа (аудио/видео)
     const toggleMedia = useCallback((type: 'audio' | 'video') => {
         setMediaState(prev => {
             const newState = {...prev, [type]: !prev[type]};
             
+            // Включение/выключение соответствующих треков
             if (localMediaStream.current) {
                 localMediaStream.current.getTracks()
                     .filter(track => track.kind === type)
@@ -205,11 +228,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         });
     }, []);
 
+    // Переключение медиа устройства
     const switchMediaDevice = useCallback(async (
         type: 'audio' | 'video', 
         deviceId?: string
     ): Promise<boolean> => {
         try {
+            // Получение нового медиа потока с выбранным устройством
             const stream = await navigator.mediaDevices.getUserMedia({
                 [type]: deviceId ? { deviceId: { exact: deviceId } } : true
             });
@@ -218,16 +243,19 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             const oldTracks = localMediaStream.current?.getTracks()
                 .filter(track => track.kind === type);
             
+            // Остановка старых треков
             if (oldTracks) {
                 oldTracks.forEach(track => track.stop());
             }
             
+            // Добавление новых треков
             if (localMediaStream.current) {
                 tracks.forEach(track => localMediaStream.current!.addTrack(track));
             } else {
                 localMediaStream.current = new MediaStream(tracks);
             }
             
+            // Обновление треков во всех peer соединениях
             Object.values(peerConnections.current).forEach(pc => {
                 const senders = pc.getSenders();
                 const sender = senders.find(s => s.track?.kind === type);
@@ -236,6 +264,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
                 }
             });
             
+            // Обновление локального видео элемента
             if (type === 'video') {
                 const localVideo = peerMediaElements.current[LOCAL_VIDEO];
                 if (localVideo) {
@@ -252,22 +281,26 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
     }, []);
 
+    // Установка peer-to-peer соединения
     const setupPeerConnection = useCallback(async (
         peerID: string, 
-        createOffer: boolean
+        createOffer: boolean  // Нужно ли создавать оффер
     ) => {
         if (peerID in peerConnections.current) {
             return;
         }
 
+        // Создание нового RTCPeerConnection
         const pc = new RTCPeerConnection({
             iceServers: iceServers.current
         });
 
         peerConnections.current[peerID] = pc;
 
+        // Обработка ICE кандидатов
         pc.onicecandidate = (event) => {
             if (event.candidate) {
+                // Отправка кандидата через сокет
                 socket.emit(ACTIONS.RELAY_ICE, {
                     peerID,
                     iceCandidate: event.candidate,
@@ -275,13 +308,16 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             }
         };
 
+        // Логирование состояния ICE соединения
         pc.oniceconnectionstatechange = () => {
             console.log(`ICE state for ${peerID}:`, pc.iceConnectionState);
         };
 
+        // Получение удаленного медиа потока
         pc.ontrack = ({ streams: [remoteStream] }) => {
             if (!remoteStream) return;
             
+            // Добавление клиента и обновление видео элемента
             addNewClient(peerID, () => {
                 const element = peerMediaElements.current[peerID];
                 if (element) {
@@ -290,12 +326,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             });
         };
 
+        // Добавление локальных треков в соединение
         if (localMediaStream.current) {
             localMediaStream.current.getTracks().forEach(track => {
                 pc.addTrack(track, localMediaStream.current!);
             });
         }
 
+        // Создание оффера, если требуется
         if (createOffer) {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -306,14 +344,17 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
     }, [addNewClient]);
 
+    // Добавление сообщения в чат
     const addChatMessage = useCallback((message: ChatMessage) => {
         chatMessages.current = [...chatMessages.current, message];
     }, []);
 
+    // Получение всех сообщений чата
     const getChatMessages = useCallback((): ChatMessage[] => {
         return chatMessages.current;
     }, []);
 
+    // Эффект инициализации при монтировании
     useEffect(() => {
         const { isSupported, errors } = checkWebRTCAvailability();
         setWebRTCStatus({ isSupported, errors });
@@ -332,6 +373,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
                 if (!isMounted || !stream) return;
 
                 localMediaStream.current = stream;
+                // Добавление локального видео
                 addNewClient(LOCAL_VIDEO, () => {
                     const localVideo = peerMediaElements.current[LOCAL_VIDEO];
                     if (localVideo) {
@@ -340,6 +382,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
                     }
                 });
 
+                // Подключение к комнате
                 if (roomID) {
                     socket.emit(ACTIONS.JOIN, { room: roomID });
                 }
@@ -351,22 +394,28 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
         init();
 
+        // Очистка при размонтировании
         return () => {
             isMounted = false;
+            // Закрытие всех соединений
             Object.values(peerConnections.current).forEach(pc => pc.close());
             peerConnections.current = {};
 
+            // Остановка медиа потоков
             if (stream) stream.getTracks().forEach(track => track.stop());
             if (localMediaStream.current) {
                 localMediaStream.current.getTracks().forEach(track => track.stop());
                 localMediaStream.current = null;
             }
             
+            // Отправка события выхода
             socket.emit(ACTIONS.LEAVE);
         };
     }, [roomID, startMediaStream, addNewClient]);
 
+    // Эффект для обработки socket событий
     useEffect(() => {
+        // Обработчики socket событий
         const handleAddPeer = ({ peerID, createOffer }: { 
             peerID: string; 
             createOffer: boolean 
@@ -444,6 +493,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             });
         };
 
+        // Регистрация обработчиков
         const handlers: Record<string, (...args: any[]) => void> = {
             [ACTIONS.ADD_PEER]: handleAddPeer,
             [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
@@ -459,6 +509,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             }
         );
 
+        // Отписка от событий при размонтировании
         return () => {
             (Object.entries(handlers) as [keyof typeof ACTIONS, (...args: any[]) => void][]).forEach(
                 ([action, handler]) => {
@@ -468,6 +519,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         };
     }, [setupPeerConnection, updateClients, addChatMessage]);
 
+    // Функция для привязки видео элементов
     const provideMediaRef = useCallback((
         id: string, 
         node: HTMLVideoElement | null
@@ -475,11 +527,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         if (node) {
             node.autoplay = true;
             node.playsInline = true;
-            node.muted = id === LOCAL_VIDEO;
+            node.muted = id === LOCAL_VIDEO;  // Отключаем звук для локального видео
             peerMediaElements.current[id] = node;
         }
     }, []);
 
+    // Возвращаемые хуком значения
     return {
         clients,
         provideMediaRef,

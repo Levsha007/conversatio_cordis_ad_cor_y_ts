@@ -1,15 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node"
+    "target": "ES2022",                     // Целевая версия ECMAScript
+    "module": "commonjs",                   // Система модулей
+    "outDir": "./dist",                     // Директория для скомпилированных файлов
+    "rootDir": "./",                        // Корневая директория исходников
+    "strict": true,                         // Строгий режим проверки типов
+    "esModuleInterop": true,                // Совместимость модулей ES и CommonJS
+    "skipLibCheck": true,                   // Пропуск проверки типов в библиотеках
+    "forceConsistentCasingInFileNames": true, // Чувствительность к регистру в именах файлов
+    "moduleResolution": "node"              // Стратегия разрешения модулей
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["**/*.ts"],                   // Файлы для компиляции
+  "exclude": ["node_modules"]                // Исключаемые директории
 }
