@@ -77,8 +77,8 @@ const Room: React.FC = () => {
     availableDevices,
     addChatMessage,
     getChatMessages,
-    startMediaStream,
-    peerMediaElements
+    peerMediaElements,
+    reconnect
   } = useWebRTC(roomID || '');
   
   const videoLayout = calculateLayout(clients.length);
@@ -99,18 +99,7 @@ const Room: React.FC = () => {
   const handleRetry = async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
-    
-    const stream = await startMediaStream();
-    if (stream) {
-      if (peerMediaElements.current[LOCAL_VIDEO]) {
-        peerMediaElements.current[LOCAL_VIDEO]!.srcObject = stream;
-        peerMediaElements.current[LOCAL_VIDEO]!.volume = 0;
-      }
-      
-      if (roomID) {
-        socket.emit(ACTIONS.JOIN, { room: roomID });
-      }
-    }
+    await reconnect();
   };
 
   const handleSendMessage = () => {

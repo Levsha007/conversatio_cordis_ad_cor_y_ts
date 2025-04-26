@@ -40,8 +40,8 @@ interface UseWebRTCReturn {
     availableDevices: AvailableDevices;
     addChatMessage: (message: ChatMessage) => void;
     getChatMessages: () => ChatMessage[];
-    startMediaStream: () => Promise<MediaStream | null>;
     peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
+    reconnect: () => Promise<void>;
 }
 
 function checkWebRTCAvailability(): WebRTCStatus {
@@ -155,6 +155,39 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             return null;
         }
     }, [getMediaConstraints, enumerateDevices]);
+
+    const reconnect = useCallback(async () => {
+        try {
+            Object.values(peerConnections.current).forEach(pc => pc.close());
+            peerConnections.current = {};
+            
+            if (localMediaStream.current) {
+                localMediaStream.current.getTracks().forEach(track => track.stop());
+                localMediaStream.current = null;
+            }
+
+            updateClients([], () => {});
+
+            const stream = await startMediaStream();
+            if (!stream) return;
+
+            localMediaStream.current = stream;
+            addNewClient(LOCAL_VIDEO, () => {
+                const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+                if (localVideo) {
+                    localVideo.srcObject = stream;
+                    localVideo.volume = 0;
+                }
+            });
+
+            if (roomID) {
+                socket.emit(ACTIONS.JOIN, { room: roomID });
+            }
+        } catch (err) {
+            console.error('Reconnection error:', err);
+            setMediaError(err as Error);
+        }
+    }, [roomID, startMediaStream, addNewClient, updateClients]);
 
     const toggleMedia = useCallback((type: 'audio' | 'video') => {
         setMediaState(prev => {
@@ -459,7 +492,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         availableDevices,
         addChatMessage,
         getChatMessages,
-        startMediaStream,
-        peerMediaElements
+        peerMediaElements,
+        reconnect
     };
 }
