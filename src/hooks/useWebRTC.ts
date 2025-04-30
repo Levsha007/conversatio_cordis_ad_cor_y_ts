@@ -230,90 +230,85 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
     // Переключение медиа устройства
     const switchMediaDevice = useCallback(async (
-        type: 'audio' | 'video', 
+        type: 'audio' | 'video',
         deviceId?: string
     ): Promise<boolean> => {
         try {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            // Инициализируем constraints с базовыми значениями
-            let constraints: MediaStreamConstraints = {
-                [type]: deviceId ? { deviceId } : true
-            };
-            
-            // Специальная обработка для мобильных устройств при переключении камеры
-            if (type === 'video' && isMobile && !deviceId) {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                
-                if (videoDevices.length > 1) {
-                    const currentDevice = localMediaStream.current?.getVideoTracks()[0]?.getSettings().deviceId;
-                    const otherDevice = videoDevices.find(d => d.deviceId !== currentDevice);
-                    
-                    if (otherDevice) {
-                        // Обновляем constraints для переключения на другую камеру
-                        constraints = {
-                            video: { deviceId: { exact: otherDevice.deviceId } }
-                        };
-                    }
-                }
-            }
-            
-            // 1. Получаем новый медиапоток с указанными ограничениями
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            const newTracks = stream.getTracks();
-            
-            // 2. Останавливаем старые треки того же типа
+            // 1. Останавливаем текущие треки
             const oldTracks = localMediaStream.current?.getTracks()
                 .filter(track => track.kind === type) || [];
-                
+            
             oldTracks.forEach(track => {
                 track.stop();
                 localMediaStream.current?.removeTrack(track);
             });
+    
+            // 2. Создаём новые constraints
+            const constraints: MediaStreamConstraints = {
+                [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+            };
+    
+            // 3. Получаем новый поток
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            const newTracks = stream.getTracks();
+    
+            // 4. Добавляем новые треки в основной поток
+            if (!localMediaStream.current) {
+                localMediaStream.current = new MediaStream();
+            }
             
-            // 3. Добавляем новые треки в локальный поток
             newTracks.forEach(track => {
-                if (localMediaStream.current) {
-                    localMediaStream.current.addTrack(track);
-                    // Сохраняем предыдущее состояние (вкл/выкл)
-                    track.enabled = mediaState[type];
-                }
+                localMediaStream.current?.addTrack(track);
+                // Сохраняем предыдущее состояние (вкл/выкл)
+                track.enabled = mediaState[type];
             });
-            
-            // 4. Обновляем все peer-соединения
+    
+            // 5. Обновляем все peer соединения
             Object.values(peerConnections.current).forEach(pc => {
                 const senders = pc.getSenders();
                 senders.forEach(sender => {
                     if (sender.track?.kind === type) {
                         const newTrack = newTracks.find(t => t.kind === type);
                         if (newTrack) {
-                            sender.replaceTrack(newTrack);
+                            sender.replaceTrack(newTrack).catch(e => {
+                                console.error('Ошибка при замене трека:', e);
+                            });
                         }
                     }
                 });
             });
-            
-            // 5. Обновляем элемент локального видео
+    
+            // 6. Обновляем элемент локального видео
             const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-            if (localVideo && localMediaStream.current) {
+            if (localVideo) {
                 localVideo.srcObject = new MediaStream(
-                    localMediaStream.current.getTracks()
+                    localMediaStream.current?.getTracks() || []
                 );
             }
-            
-            // 6. Обновляем состояние медиа (аудио/видео)
+    
+            // 7. Обновляем состояние
             setMediaState(prev => ({
                 ...prev,
                 [type]: newTracks[0]?.enabled ?? prev[type]
             }));
-            
-            // 7. Обновляем список доступных устройств
+    
+            // 8. Обновляем список устройств
             await enumerateDevices();
-            
+    
             return true;
         } catch (err) {
-            console.error(`Ошибка при переключении устройства ${type}:`, err);
+            console.error(`Ошибка переключения устройства ${type}:`, err);
+            
+            // Восстанавливаем предыдущее состояние при ошибке
+            if (localMediaStream.current) {
+                const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+                if (localVideo) {
+                    localVideo.srcObject = new MediaStream(
+                        localMediaStream.current.getTracks()
+                    );
+                }
+            }
+            
             return false;
         }
     }, [enumerateDevices, mediaState]);
