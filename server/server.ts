@@ -5,7 +5,7 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
 import { ACTIONS } from './socket/actions';
 
-// Интерфейс для сообщений чата
+// Интерфейс для сообщений чата 
 interface ChatMessage {
   id: string;          // Уникальный идентификатор сообщения
   sender: string;      // ID отправителя
