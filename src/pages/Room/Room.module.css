@@ -3,29 +3,28 @@
     flex-wrap: wrap;
     height: 100vh;
     background-color: #000;
-  }
-  
-  .videoWrapper {
+}
+
+.videoWrapper {
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
     overflow: hidden;
     background-color: #000;
-  }
-  
-  .video,
-  .videoLocalHidden {
+}
+
+.video {
     width: 100%;
     height: 100%;
     object-fit: contain;
-  }
-  
-  .videoLocalHidden {
+}
+
+.videoLocalHidden {
     background-color: #000 !important;
-  }
-  
-  .userLabel {
+}
+
+.userLabel {
     position: absolute;
     bottom: 10px;
     left: 10px;
@@ -37,10 +36,9 @@
     display: flex;
     align-items: center;
     gap: 5px;
-  }
-  
-  /* Controls */
-  .controls {
+}
+
+.controls {
     position: fixed;
     bottom: 20px;
     left: 50%;
@@ -48,9 +46,9 @@
     display: flex;
     gap: 10px;
     z-index: 100;
-  }
-  
-  .controlButton {
+}
+
+.controlButton {
     padding: 10px;
     border-radius: 50%;
     border: none;
@@ -61,35 +59,45 @@
     justify-content: center;
     width: 50px;
     height: 50px;
-  }
-  
-  .controlButton--mic-on,
-  .controlButton--cam-on,
-  .chatSendButton {
+}
+
+.controlButtonMicOn {
     background: #4CAF50;
-  }
-  
-  .controlButton--mic-off,
-  .controlButton--cam-off,
-  .controlButton--leave {
+}
+
+.controlButtonMicOff {
     background: #f44336;
-  }
-  
-  .controlButton--chat,
-  .controlButton--settings {
+}
+
+.controlButtonCamOn {
+    background: #4CAF50;
+}
+
+.controlButtonCamOff {
+    background: #f44336;
+}
+
+.controlButtonChat {
     background: #555;
-  }
-  
-  .controlButton--chat-active {
+}
+
+.controlButtonChatActive {
     background: #2196F3;
-  }
-  
-  .controlButton--settings-active {
+}
+
+.controlButtonSettings {
+    background: #555;
+}
+
+.controlButtonSettingsActive {
     background: #FF9800;
-  }
-  
-  /* Chat */
-  .chatContainer {
+}
+
+.controlButtonLeave {
+    background: #f44336;
+}
+
+.chatContainer {
     position: fixed;
     right: 20px;
     bottom: 80px;
@@ -101,99 +109,98 @@
     flex-direction: column;
     z-index: 100;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-  }
-  
-  .chatHeader,
-  .settingsHeader {
+}
+
+.chatHeader {
     padding: 10px;
     border-bottom: 1px solid #eee;
     font-weight: bold;
     display: flex;
     justify-content: space-between;
     align-items: center;
-  }
-  
-  .chatCloseButton,
-  .settingsCloseButton {
+}
+
+.chatCloseButton {
     background: none;
     border: none;
     cursor: pointer;
     font-size: 1.2rem;
-  }
-  
-  .chatMessages {
+}
+
+.chatMessages {
     flex: 1;
     overflow-y: auto;
     padding: 10px;
-  }
-  
-  .noMessages {
+}
+
+.noMessages {
     color: #999;
     text-align: center;
     margin-top: 50%;
-  }
-  
-  .message {
+}
+
+.message {
     margin-bottom: 10px;
-  }
-  
-  .messageLocal {
+    text-align: left;
+}
+
+.messageLocal {
     text-align: right;
-  }
-  
-  .messageBubble {
+}
+
+.messageBubble {
     display: inline-block;
     padding: 8px 12px;
     border-radius: 15px;
     max-width: 80%;
     word-break: break-word;
-  }
-  
-  .messageBubbleLocal {
+}
+
+.messageBubbleLocal {
     background: #DCF8C6;
-  }
-  
-  .messageBubbleRemote {
+}
+
+.messageBubbleRemote {
     background: #ECECEC;
-  }
-  
-  .messageTime {
+}
+
+.messageTime {
     font-size: 0.7em;
     color: #999;
     margin-top: 3px;
-  }
-  
-  .chatInputContainer {
+}
+
+.chatInputContainer {
     padding: 10px;
     border-top: 1px solid #eee;
     display: flex;
-  }
-  
-  .chatInput {
+}
+
+.chatInput {
     flex: 1;
     padding: 10px;
     border-radius: 20px;
     border: 1px solid #ddd;
     outline: none;
     font-size: 0.9rem;
-  }
-  
-  .chatSendButton {
+}
+
+.chatSendButton {
     margin-left: 10px;
     padding: 0 15px;
+    background: #4CAF50;
     color: white;
     border: none;
     border-radius: 20px;
     cursor: pointer;
     font-size: 0.9rem;
-  }
-  
-  .chatSendButtonDisabled {
+}
+
+.chatSendButtonDisabled {
     opacity: 0.5;
-  }
-  
-  /* Settings */
-  .settingsPanel {
+}
+
+.settingsPanel {
     position: fixed;
     top: 20px;
     right: 20px;
@@ -203,27 +210,40 @@
     z-index: 100;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
     min-width: 250px;
-  }
-  
-  .settingsSection {
+}
+
+.settingsHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 15px;
-  }
-  
-  .settingsLabel {
+}
+
+.settingsCloseButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.settingsSection {
+    margin-bottom: 15px;
+}
+
+.settingsLabel {
     display: block;
     margin-bottom: 5px;
     font-weight: bold;
-  }
-  
-  .settingsSelect {
+}
+
+.settingsSelect {
     width: 100%;
     padding: 8px;
     border-radius: 5px;
     border: 1px solid #ddd;
-  }
-  
-  /* Error Overlay */
-  .errorOverlay {
+}
+
+.errorOverlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -238,20 +258,20 @@
     background-color: rgba(0,0,0,0.7);
     text-align: center;
     padding: 20px;
-  }
-  
-  .errorTitle {
+}
+
+.errorTitle {
     margin-bottom: 20px;
     font-size: 1.5rem;
-  }
-  
-  .errorDescription {
+}
+
+.errorDescription {
     max-width: 80%;
     white-space: pre-line;
     margin-bottom: 20px;
-  }
-  
-  .retryButton {
+}
+
+.retryButton {
     padding: 10px 20px;
     background-color: #4CAF50;
     color: white;
@@ -260,14 +280,39 @@
     cursor: pointer;
     font-size: 1rem;
     transition: background-color 0.3s;
-  }
-  
-  .retryButton:hover {
+}
+
+.retryButton:hover {
     background-color: #45a049;
-  }
-  
-  /* Copy button */
-  .copyButton {
+}
+
+@media (max-width: 767px) {
+    .roomContainer {
+        flex-direction: column;
+        flex-wrap: nowrap;
+    }
+    
+    .chatContainer {
+        right: 10px;
+        bottom: 70px;
+        width: calc(100% - 20px);
+        height: 40%;
+    }
+    
+    .videoWrapper {
+        width: 100% !important;
+        height: auto !important;
+        aspect-ratio: 16/9;
+    }
+    
+    .video {
+        width: 100%;
+        height: auto;
+    }
+}
+
+/* Добавить новые стили */
+.copyButton {
     position: relative;
     background: #555;
   }
@@ -289,36 +334,10 @@
     white-space: nowrap;
   }
   
-  /* Main page button */
+  /* Исправить ширину кнопки на главной странице */
   .createButton {
     width: auto;
     min-width: 200px;
     padding: 12px 24px;
     margin: 0 auto;
   }
-  
-  /* Responsive */
-  @media (max-width: 767px) {
-    .roomContainer {
-      flex-direction: column;
-      flex-wrap: nowrap;
-    }
-  
-    .chatContainer {
-      right: 10px;
-      bottom: 70px;
-      width: calc(100% - 20px);
-      height: 40%;
-    }
-  
-    .videoWrapper {
-      width: 100% !important;
-      height: auto !important;
-      aspect-ratio: 16/9;
-    }
-  
-    .video {
-      height: auto;
-    }
-  }
-  
