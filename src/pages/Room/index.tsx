@@ -1,17 +1,16 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import { useEffect, useRef, useState } from 'react';
+import { FiLink } from 'react-icons/fi';
+import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
-// Интерфейс для размеров видео элементов
 interface LayoutItem {
   width: string;
   height: string;
 }
 
-// Интерфейс сообщения чата
 interface ChatMessage {
   id: string;
   text: string;
@@ -20,13 +19,12 @@ interface ChatMessage {
   sender: string;
 }
 
-// Кастомный хук для определения мобильного устройства
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const checkIsMobile = () => {
-      setIsMobile(window.innerWidth <= 767); // Проверка ширины экрана
+      setIsMobile(window.innerWidth <= 767);
     };
     
     checkIsMobile();
@@ -37,7 +35,6 @@ const useIsMobile = (): boolean => {
   return isMobile;
 };
 
-// Функция расчета расположения видео элементов
 function calculateLayout(clientsCount: number = 1): LayoutItem[] {
   const pairs = Array.from({ length: clientsCount })
     .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
@@ -65,13 +62,11 @@ function calculateLayout(clientsCount: number = 1): LayoutItem[] {
   }).flat();
 }
 
-// Основной компонент комнаты
 const Room: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { id: roomID } = useParams<{ id: string }>();
   
-  // Использование хука WebRTC
   const { 
     clients, 
     provideMediaRef, 
@@ -96,22 +91,33 @@ const Room: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(getChatMessages());
+  const [isCopied, setIsCopied] = useState(false);
+  const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Обработчик выхода из комнаты
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setIsCopied(true);
+      
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+      copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  };
+
   const handleLeaveRoom = () => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       navigate('/');
     }
   };
 
-  // Обработчик повторного подключения
   const handleRetry = async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   };
 
-  // Обработчик отправки сообщения
   const handleSendMessage = () => {
     if (messageInput.trim() && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
@@ -136,14 +142,12 @@ const Room: React.FC = () => {
     }
   };
 
-  // Автопрокрутка чата при новых сообщениях
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Подписка на сообщения чата
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
@@ -178,7 +182,6 @@ const Room: React.FC = () => {
     };
   }, [roomID]);
 
-  // Обработка ошибок медиа
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -201,7 +204,6 @@ const Room: React.FC = () => {
 
   return (
     <div className={styles.roomContainer}>
-      {/* Блок ошибок и загрузки */}
       {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
@@ -239,7 +241,6 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
-      {/* Видео элементы участников */}
       {clients.map((clientID, index) => (
         <div 
           key={`${clientID}-${retryCount}`}
@@ -263,8 +264,16 @@ const Room: React.FC = () => {
         </div>
       ))}
 
-      {/* Панель управления */}
       <div className={styles.controls}>
+        <button
+          onClick={handleCopyLink}
+          className={`${styles.controlButton} ${styles.copyButton}`}
+          title="Скопировать ссылку на комнату"
+        >
+          <span>🔗</span>
+          {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
+        </button>
+
         <button
           onClick={() => toggleMedia('audio')}
           className={`${styles.controlButton} ${
@@ -314,7 +323,6 @@ const Room: React.FC = () => {
         </button>
       </div>
 
-      {/* Чат комнаты */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
@@ -378,7 +386,6 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>

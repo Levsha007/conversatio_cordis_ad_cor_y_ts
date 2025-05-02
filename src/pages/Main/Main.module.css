@@ -29,6 +29,10 @@
     font-size: 1rem;
     font-weight: bold;
     transition: background-color 0.3s;
+    width: auto;
+    min-width: 200px;
+    padding: 12px 24px;
+    margin: 0 auto;
 }
 
 .createButton:hover {
@@ -101,3 +105,26 @@
         margin-bottom: 30px;
     }
 }
+
+/* Добавить новые стили */
+.copyButton {
+    position: relative;
+    background: #555;
+  }
+  
+  .copyButton:hover {
+    background: #666;
+  }
+  
+  .copyLabel {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
