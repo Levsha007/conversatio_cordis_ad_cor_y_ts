@@ -1,47 +1,122 @@
-# Getting Started with Create React App
+# Video Conference 🎥🔗
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Реализация P2P видеоконференций с end-to-end шифрованием и чатом, использующая современный веб-стек.
 
-## Available Scripts
+![Интерфейс приложения](./public/image.png) <!-- Добавьте реальный скриншот -->
 
-In the project directory, you can run:
+## 🌟 Особенности
 
-### `npm start`
+* 🛡️ **Безопасные комнаты** с уникальными UUID v4
+* 📹 **P2P видеосвязь** через WebRTC (без промежуточных серверов)
+* 💬 **Реалтайм-чат** с историей сообщений
+* 🔊 **Управление устройствами** (камера/микрофон)
+* 📱 **Адаптивный интерфейс** для всех устройств
+* ⚡ **Мгновенное подключение** по ссылке-приглашению
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 🛠 ️ Технологии
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+![React](https://img.shields.io/badge/-React-61DAFB?logo=react\&logoColor=white)
+![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript\&logoColor=white)
+![WebRTC](https://img.shields.io/badge/-WebRTC-333333?logo=webrtc)
+![Socket.IO](https://img.shields.io/badge/-Socket.IO-010101?logo=socket.io)
+![Vercel](https://img.shields.io/badge/-Vercel-000000?logo=vercel)
+![Render](https://img.shields.io/badge/-Render-46e3b7?logo=render)
 
-### `npm test`
+## 🚀 Быстрый старт
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Предварительные требования
 
-### `npm run build`
+* Node.js ≥16.x
+* npm ≥9.x
+* Браузер с поддержкой WebRTC (Chrome, Firefox, Edge)
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Установка
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+1. Клонируйте репозиторий:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+git clone https://github.com/your-username/video-conference.git
+cd video-conference
+```
 
+2. Установите зависимости для клиента и сервера:
 
-### `npm run eject`
+```bash
+# Клиент
+cd client && npm install
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+# Сервер
+cd ../server && npm install
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+3. Настройте окружение:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+```bash
+# client/.env
+REACT_APP_SERVER_URL=wss://your-server-url.onrender.com
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+# server/.env
+PORT=3001
+CORS_ORIGIN=https://your-client-url.vercel.app
+```
 
-## Learn More
+### Запуск
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### Локальная разработка:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+# Запуск сервера
+cd server && npm run dev
+
+# Запуск клиента
+cd client && npm start
+```
+
+#### Продакшен-сборка:
+
+```bash
+# Сборка клиента
+cd client && npm run build
+
+# Запуск сервера
+cd server && npm start
+```
+
+## 🌐 Deployment
+
+### Клиент:
+
+* Импортируйте репозиторий в [Vercel](https://vercel.com)
+* Настройте переменные окружения (`REACT_APP_SERVER_URL`)
+* Деплой из ветки `main`
+
+### Сервер:
+
+* Создайте Web Service в [Render](https://render.com)
+* Укажите команду сборки: `npm run build`
+* Команда запуска: `npm start`
+* Добавьте переменные окружения из `server/.env`
+
+## 🎯 Как использовать
+
+### Создать комнату:
+
+* Нажмите "Create New Room"
+* Скопируйте ссылку из адресной строки
+
+### Присоединиться:
+
+* Введите ID комнаты на главной странице
+* Или перейдите по прямой ссылке
+
+### Управление:
+
+* 🎚️ Кнопки управления медиа в нижней панели
+* 💬 Откройте чат для обмена сообщениями
+* ⚙️ Настройте устройства в выпадающем меню
+
+## 📄 Лицензия
+
+Этот проект распространяется под лицензией MIT. Подробности см. в LICENSE.
+
+> **Примечание**: Для работы приложения требуется HTTPS-соединение и доступ к камере/микрофону в браузере.
