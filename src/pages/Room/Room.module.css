@@ -341,3 +341,43 @@
     padding: 12px 24px;
     margin: 0 auto;
   }
+
+  .messageSender {
+    font-weight: bold;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+    color: #555;
+  }
+  
+  .messageLocal .messageSender {
+    text-align: right;
+    color: #2ecc71; /* Зеленый для ваших сообщений */
+  }
+
+  .chatInputContainer {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #eee;
+    gap: 8px; /* Добавляем отступ между элементами */
+  }
+  
+  .chatInput {
+    flex: 1;
+    padding: 10px;
+    border-radius: 20px;
+    border: 1px solid #ddd;
+    outline: none;
+    font-size: 0.9rem;
+    min-width: 0; /* Важно для корректного сжатия */
+  }
+  
+  .chatSendButton {
+    padding: 0 12px; /* Уменьшаем горизонтальные отступы */
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap; /* Текст не переносится */
+    flex-shrink: 0; /* Запрещаем сжатие */
+  }

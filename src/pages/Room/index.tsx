@@ -1,3 +1,4 @@
+// Импорт необходимых зависимостей
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
@@ -5,6 +6,7 @@ import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
+// Интерфейсы для типизации
 interface LayoutItem {
   width: string;
   height: string;
@@ -18,14 +20,12 @@ interface ChatMessage {
   sender: string;
 }
 
+// Кастомный хук для определения мобильного устройства
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth <= 767);
-    };
-    
+    const checkIsMobile = () => setIsMobile(window.innerWidth <= 767);
     checkIsMobile();
     window.addEventListener('resize', checkIsMobile);
     return () => window.removeEventListener('resize', checkIsMobile);
@@ -34,41 +34,40 @@ const useIsMobile = (): boolean => {
   return isMobile;
 };
 
+// Функция расчета расположения видео элементов
 function calculateLayout(clientsCount: number = 1): LayoutItem[] {
-  const pairs = Array.from({ length: clientsCount })
-    .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
-      if (index % 2 === 0) {
-        acc.push(arr.slice(index, index + 2) as undefined[]);
-      }
+  // Разбиваем клиентов на пары для сетки 2x2
+  const pairs = Array.from({ length: clientsCount }).reduce<Array<Array<undefined>>>(
+    (acc, _, index, arr) => {
+      if (index % 2 === 0) acc.push(arr.slice(index, index + 2) as undefined[]);
       return acc;
     }, []);
 
-  const rowsNumber = pairs.length;
-  const height = `${100 / rowsNumber}%`;
-
+  // Рассчитываем размеры для каждого элемента
   return pairs.map((row, index, arr) => {
+    const height = `${100 / pairs.length}%`;
+    
+    // Если последний элемент один - растягиваем на всю ширину
     if (index === arr.length - 1 && row.length === 1) {
-      return [{
-        width: '100%',
-        height,
-      }];
+      return [{ width: '100%', height }];
     }
 
-    return row.map(() => ({
-      width: '50%',
-      height,
-    }));
+    // Иначе - 50% ширины
+    return row.map(() => ({ width: '50%', height }));
   }).flat();
 }
 
+// Основной компонент комнаты
 const Room: React.FC = () => {
+  // Хуки навигации и параметров URL
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { id: roomID } = useParams<{ id: string }>();
   
+  // Использование кастомного хука WebRTC
   const { 
     clients, 
-    provideMediaRef, 
+    provideMediaRef,
     mediaError, 
     isMediaReady, 
     webRTCStatus,
@@ -82,6 +81,7 @@ const Room: React.FC = () => {
     reconnect
   } = useWebRTC(roomID || '');
   
+  // Состояния и рефы компонента
   const videoLayout = calculateLayout(clients.length);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
@@ -93,11 +93,18 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  // Функция получения метки отправителя
+  const getSenderLabel = (senderId: string): string => {
+    if (senderId === socket.id) return 'Вы';
+    const peerIndex = clients.indexOf(senderId);
+    return peerIndex !== -1 ? `Участник ${peerIndex + 1}` : 'Неизвестный';
+  };
+
+  // Копирование ссылки на комнату
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setIsCopied(true);
-      
       if (copyTimeout.current) clearTimeout(copyTimeout.current);
       copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
@@ -105,18 +112,21 @@ const Room: React.FC = () => {
     }
   };
 
+  // Выход из комнаты
   const handleLeaveRoom = () => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       navigate('/');
     }
   };
 
+  // Повторная попытка подключения
   const handleRetry = async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   };
 
+  // Отправка сообщения в чат
   const handleSendMessage = () => {
     if (messageInput.trim() && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
@@ -128,10 +138,12 @@ const Room: React.FC = () => {
         sender: socket.id || 'unknown'
       };
       
+      // Добавляем сообщение локально
       addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
       
+      // Отправляем сообщение через сокет
       socket.emit(ACTIONS.CHAT_MESSAGE, { 
         roomID, 
         message: messageInput,
@@ -141,12 +153,14 @@ const Room: React.FC = () => {
     }
   };
 
+  // Автопрокрутка чата к последнему сообщению
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // Подписка на сообщения чата
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
@@ -154,11 +168,6 @@ const Room: React.FC = () => {
       sender: string;
       timestamp: string;
     }) => {
-      if (!msg.sender) {
-        console.warn('Received message without sender:', msg);
-        return;
-      }
-
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         return [...prev, {
@@ -171,16 +180,20 @@ const Room: React.FC = () => {
       });
     };
 
+    // Подписываемся на события чата
     socket.on(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
     if (roomID) {
+      // Запрашиваем историю чата при загрузке
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
 
+    // Отписываемся при размонтировании
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
     };
   }, [roomID]);
 
+  // Обработка ошибок медиа
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -201,8 +214,10 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
+  // Рендер компонента
   return (
     <div className={styles.roomContainer}>
+      {/* Оверлей с ошибками */}
       {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
@@ -240,6 +255,7 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
+      {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
           key={`${clientID}-${retryCount}`}
@@ -263,16 +279,9 @@ const Room: React.FC = () => {
         </div>
       ))}
 
+      {/* Панель управления */}
       <div className={styles.controls}>
-        <button
-          onClick={handleCopyLink}
-          className={`${styles.controlButton} ${styles.copyButton}`}
-          title="Скопировать ссылку на комнату"
-        >
-          <span>🔗</span>
-          {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
-        </button>
-
+        {/* Кнопка микрофона */}
         <button
           onClick={() => toggleMedia('audio')}
           className={`${styles.controlButton} ${
@@ -283,6 +292,7 @@ const Room: React.FC = () => {
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
 
+        {/* Кнопка камеры */}
         <button
           onClick={() => toggleMedia('video')}
           className={`${styles.controlButton} ${
@@ -293,6 +303,7 @@ const Room: React.FC = () => {
           {mediaState.video ? '📹' : '📷'}
         </button>
 
+        {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
           className={`${styles.controlButton} ${
@@ -303,6 +314,7 @@ const Room: React.FC = () => {
           💬
         </button>
 
+        {/* Кнопка настроек */}
         <button
           onClick={() => setShowSettings(!showSettings)}
           className={`${styles.controlButton} ${
@@ -313,6 +325,17 @@ const Room: React.FC = () => {
           ⚙️
         </button>
 
+        {/* Кнопка копирования ссылки */}
+        <button
+          onClick={handleCopyLink}
+          className={`${styles.controlButton} ${styles.copyButton}`}
+          title="Скопировать ссылку на комнату"
+        >
+          <span>🔗</span>
+          {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
+        </button>
+
+        {/* Кнопка выхода */}
         <button
           onClick={handleLeaveRoom}
           className={`${styles.controlButton} ${styles.controlButtonLeave}`}
@@ -322,6 +345,7 @@ const Room: React.FC = () => {
         </button>
       </div>
 
+      {/* Чат */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
@@ -350,6 +374,9 @@ const Room: React.FC = () => {
                     msg.isLocal ? styles.messageLocal : ''
                   }`}
                 >
+                  <div className={styles.messageSender}>
+                    {getSenderLabel(msg.sender)}
+                  </div>
                   <div className={`${styles.messageBubble} ${
                     msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
                   }`}>
@@ -363,6 +390,7 @@ const Room: React.FC = () => {
             )}
           </div>
           
+          {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
             <input
               type="text"
@@ -379,12 +407,13 @@ const Room: React.FC = () => {
                 !messageInput.trim() ? styles.chatSendButtonDisabled : ''
               }`}
             >
-              Отпр
+              Отправить
             </button>
           </div>
         </div>
       )}
 
+      {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>
@@ -397,6 +426,7 @@ const Room: React.FC = () => {
             </button>
           </div>
 
+          {/* Выбор микрофона */}
           <div className={styles.settingsSection}>
             <label className={styles.settingsLabel}>
               Микрофон:
@@ -413,6 +443,7 @@ const Room: React.FC = () => {
             </select>
           </div>
 
+          {/* Выбор камеры */}
           <div className={styles.settingsSection}>
             <label className={styles.settingsLabel}>
               Камера:

@@ -1,583 +1,493 @@
+// Импорт необходимых хуков и зависимостей
 import { useEffect, useRef, useCallback, useState } from 'react';
 import useStateWithCallback from './useStateWithCallback';
 import socket from '../socket';
 import { ACTIONS } from '../socket/actions';
 
-// Константа для идентификации локального видео потока
+// Константа для идентификации локального видео
 export const LOCAL_VIDEO = 'LOCAL_VIDEO';
 
-// Интерфейсы для типизации возвращаемых значений и состояний
+// Интерфейсы для типизации данных
 interface WebRTCStatus {
-    isSupported: boolean;  // Флаг поддержки WebRTC
-    errors: string[];      // Список ошибок (если не поддерживается)
+  isSupported: boolean;  // Поддерживается ли WebRTC
+  errors: string[];      // Список ошибок, если не поддерживается
 }
 
 interface MediaState {
-    audio: boolean;  // Состояние аудио (вкл/выкл)
-    video: boolean;  // Состояние видео (вкл/выкл)
+  audio: boolean;  // Состояние аудио (вкл/выкл)
+  video: boolean;  // Состояние видео (вкл/выкл)
 }
 
 interface AvailableDevices {
-    audio: MediaDeviceInfo[];  // Доступные аудио устройства
-    video: MediaDeviceInfo[];  // Доступные видео устройства
+  audio: MediaDeviceInfo[];  // Доступные аудио устройства
+  video: MediaDeviceInfo[];  // Доступные видео устройства
 }
 
 interface ChatMessage {
-    id: string;         // Уникальный ID сообщения
-    text: string;       // Текст сообщения
-    isLocal: boolean;   // Флаг локального сообщения
-    timestamp: string;  // Временная метка
-    sender: string;     // ID отправителя
+  id: string;         // Уникальный ID сообщения
+  text: string;       // Текст сообщения
+  isLocal: boolean;   // Отправлено ли текущим пользователем
+  timestamp: string;  // Время отправки
+  sender: string;     // ID отправителя
 }
 
-// Интерфейс возвращаемых хуком значений
 interface UseWebRTCReturn {
-    clients: string[];  // Список ID подключенных клиентов
-    provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
-    mediaError: Error | null;      // Ошибка медиа потока
-    isMediaReady: boolean;         // Флаг готовности медиа
-    webRTCStatus: WebRTCStatus;    // Статус WebRTC
-    mediaState: MediaState;        // Текущее состояние медиа
-    toggleMedia: (type: 'audio' | 'video') => void;  // Переключение медиа
-    switchMediaDevice: (type: 'audio' | 'video', deviceId?: string) => Promise<boolean>;
-    availableDevices: AvailableDevices;  // Доступные устройства
-    addChatMessage: (message: ChatMessage) => void;  // Добавление сообщения
-    getChatMessages: () => ChatMessage[];  // Получение сообщений
-    peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
-    reconnect: () => Promise<void>;  // Переподключение
+  clients: string[];  // Список ID подключенных клиентов
+  provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
+  mediaError: Error | null;  // Ошибка медиа
+  isMediaReady: boolean;     // Готовность медиа
+  webRTCStatus: WebRTCStatus; // Статус WebRTC
+  mediaState: MediaState;     // Текущее состояние медиа
+  toggleMedia: (type: 'audio' | 'video') => void;  // Переключение медиа
+  switchMediaDevice: (type: 'audio' | 'video', deviceId?: string) => Promise<boolean>;
+  availableDevices: AvailableDevices;  // Доступные устройства
+  addChatMessage: (message: ChatMessage) => void;  // Добавление сообщения
+  getChatMessages: () => ChatMessage[];  // Получение сообщений
+  peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
+  reconnect: () => Promise<void>;  // Переподключение
 }
 
-// Проверка доступности WebRTC в браузере
+// Функция проверки поддержки WebRTC в браузере
 function checkWebRTCAvailability(): WebRTCStatus {
-    const errors: string[] = [];
-    
-    if (!navigator) {
-        errors.push('WebRTC не поддерживается: navigator недоступен');
-        return { isSupported: false, errors };
-    }
+  const errors: string[] = [];
+  
+  // Проверяем наличие необходимых API
+  if (!navigator.mediaDevices) errors.push('mediaDevices недоступен');
+  if (!window.RTCPeerConnection) errors.push('RTCPeerConnection недоступен');
 
-    if (!navigator.mediaDevices) {
-        errors.push('WebRTC не поддерживается: mediaDevices недоступен');
-    }
-
-    if (!window.RTCPeerConnection) {
-        errors.push('WebRTC не поддерживается: RTCPeerConnection недоступен');
-    }
-
-    return {
-        isSupported: errors.length === 0,
-        errors
-    };
+  return {
+    isSupported: errors.length === 0,  // Поддерживается, если нет ошибок
+    errors
+  };
 }
 
-// Основной хук для работы с WebRTC
+// Основной хук useWebRTC
 export default function useWebRTC(roomID?: string): UseWebRTCReturn {
-    // Состояния хука
-    const [clients, updateClients] = useStateWithCallback<string[]>([]);
-    const [mediaError, setMediaError] = useState<Error | null>(null);
-    const [isMediaReady, setIsMediaReady] = useState(false);
-    const [webRTCStatus, setWebRTCStatus] = useState<WebRTCStatus>({
-        isSupported: true,
-        errors: []
+  // Состояния компонента
+  const [clients, updateClients] = useStateWithCallback<string[]>([]);
+  const [mediaError, setMediaError] = useState<Error | null>(null);
+  const [isMediaReady, setIsMediaReady] = useState(false);
+  const [webRTCStatus, setWebRTCStatus] = useState<WebRTCStatus>(checkWebRTCAvailability());
+  const [mediaState, setMediaState] = useState<MediaState>({ audio: true, video: true });
+  const [availableDevices, setAvailableDevices] = useState<AvailableDevices>({ audio: [], video: [] });
+
+  // Рефы для хранения данных между рендерами
+  const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
+  const localMediaStream = useRef<MediaStream | null>(null);
+  const peerMediaElements = useRef<Record<string, HTMLVideoElement | null>>({ [LOCAL_VIDEO]: null });
+  const chatMessages = useRef<ChatMessage[]>([]);
+  const iceServers = useRef<RTCIceServer[]>([
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]);
+
+  // Функция добавления нового клиента
+  const addNewClient = useCallback((newClient: string, cb?: () => void) => {
+    updateClients(list => {
+      if (!list.includes(newClient)) return [...list, newClient];  // Добавляем, если еще нет
+      return list;
+    }, cb);
+  }, [updateClients]);
+
+  // Функция получения настроек медиапотока
+  const getMediaConstraints = useCallback((): MediaStreamConstraints => ({
+    audio: true,
+    video: {
+      width: { ideal: 1280 },  // Идеальная ширина
+      height: { ideal: 720 },  // Идеальная высота
+      frameRate: { ideal: 30 } // Идеальная частота кадров
+    }
+  }), []);
+
+  // Функция перечисления доступных устройств
+  const enumerateDevices = useCallback(async (): Promise<void> => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAvailableDevices({
+        audio: devices.filter(d => d.kind === 'audioinput'),  // Фильтруем аудио устройства
+        video: devices.filter(d => d.kind === 'videoinput')   // Фильтруем видео устройства
+      });
+    } catch (err) {
+      console.error('Ошибка получения устройств:', err);
+    }
+  }, []);
+
+  // Функция запуска медиапотока
+  const startMediaStream = useCallback(async (): Promise<MediaStream | null> => {
+    setMediaError(null);
+    setIsMediaReady(false);
+
+    try {
+      const { isSupported, errors } = checkWebRTCAvailability();
+      if (!isSupported) throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
+
+      // Останавливаем предыдущий поток, если есть
+      if (localMediaStream.current) {
+        localMediaStream.current.getTracks().forEach(track => track.stop());
+        localMediaStream.current = null;
+      }
+
+      // Получаем новый медиапоток с настройками
+      const stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
+      console.log('Получены треки:', stream.getTracks());  // Логирование треков
+      
+      await enumerateDevices();  // Обновляем список устройств
+      setIsMediaReady(true);
+      return stream;
+    } catch (err) {
+      console.error('Ошибка медиапотока:', err);
+      setMediaError(err as Error);
+      return null;
+    }
+  }, [getMediaConstraints, enumerateDevices]);
+
+  // Функция переподключения
+  const reconnect = useCallback(async () => {
+    try {
+      // Закрываем все соединения
+      Object.values(peerConnections.current).forEach(pc => pc.close());
+      peerConnections.current = {};
+      
+      // Останавливаем текущий поток
+      if (localMediaStream.current) {
+        localMediaStream.current.getTracks().forEach(track => track.stop());
+        localMediaStream.current = null;
+      }
+
+      // Сбрасываем список клиентов
+      updateClients([], () => {});
+
+      // Запускаем новый поток
+      const stream = await startMediaStream();
+      if (!stream) return;
+
+      localMediaStream.current = stream;
+      // Добавляем локальное видео
+      addNewClient(LOCAL_VIDEO, () => {
+        const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+        if (localVideo) {
+          localVideo.srcObject = stream;
+          localVideo.volume = 0;  // Отключаем звук у локального видео
+        }
+      });
+
+      // Присоединяемся к комнате, если указан roomID
+      if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
+    } catch (err) {
+      console.error('Ошибка переподключения:', err);
+      setMediaError(err as Error);
+    }
+  }, [roomID, startMediaStream, addNewClient, updateClients]);
+
+  // Функция переключения состояния медиа (вкл/выкл)
+  const toggleMedia = useCallback((type: 'audio' | 'video') => {
+    setMediaState(prev => {
+      const newState = { ...prev, [type]: !prev[type] };
+      // Применяем изменения к трекам
+      if (localMediaStream.current) {
+        localMediaStream.current.getTracks()
+          .filter(track => track.kind === type)
+          .forEach(track => {
+            track.enabled = newState[type];  // Включаем/выключаем трек
+          });
+      }
+      return newState;
     });
-    const [mediaState, setMediaState] = useState<MediaState>({
-        audio: true,
-        video: true
-    });
-    const [availableDevices, setAvailableDevices] = useState<AvailableDevices>({
-        audio: [],
-        video: []
-    });
+  }, []);
+
+  // Функция переключения медиаустройства
+  const switchMediaDevice = useCallback(async (
+    type: 'audio' | 'video',
+    deviceId?: string
+  ): Promise<boolean> => {
+    try {
+      // Удаляем старые треки
+      const oldTracks = localMediaStream.current?.getTracks()
+        .filter(track => track.kind === type) || [];
+      
+      oldTracks.forEach(track => {
+        track.stop();
+        localMediaStream.current?.removeTrack(track);
+      });
+
+      // Настраиваем ограничения для нового устройства
+      const constraints: MediaStreamConstraints = {
+        [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+      };
+
+      // Получаем новый поток с выбранным устройством
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const newTracks = stream.getTracks();
     
-    // Рефы для хранения мутируемых значений между рендерами
-    const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
-    const localMediaStream = useRef<MediaStream | null>(null);
-    const peerMediaElements = useRef<Record<string, HTMLVideoElement | null>>({
-        [LOCAL_VIDEO]: null,
-    });
-    const chatMessages = useRef<ChatMessage[]>([]);
+      if (!localMediaStream.current) {
+        localMediaStream.current = new MediaStream();
+      }
+      
+      // Добавляем новые треки
+      newTracks.forEach(track => {
+        localMediaStream.current?.addTrack(track);
+        track.enabled = mediaState[type];  // Сохраняем предыдущее состояние
+      });
 
-    // STUN сервера для установки P2P соединений
-    const iceServers = useRef<RTCIceServer[]>([
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]);
-
-    // Добавление нового клиента в список
-    const addNewClient = useCallback((newClient: string, cb?: () => void) => {
-        updateClients(list => {
-            if (!list.includes(newClient)) {
-                return [...list, newClient];
-            }
-            return list;
-        }, cb);
-    }, [updateClients]);
-
-    // Получение ограничений для медиа потока
-    const getMediaConstraints = useCallback((): MediaStreamConstraints => {
-        return {
-            audio: true,
-            video: {
-                width: { ideal: 1280 },  // Идеальная ширина
-                height: { ideal: 720 },   // Идеальная высота
-                frameRate: { ideal: 30 }  // Идеальная частота кадров
-            }
-        };
-    }, []);
-
-    // Получение списка доступных устройств
-    const enumerateDevices = useCallback(async (): Promise<void> => {
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            setAvailableDevices({
-                audio: devices.filter(d => d.kind === 'audioinput'),
-                video: devices.filter(d => d.kind === 'videoinput')
-            });
-        } catch (err) {
-            console.error('Error enumerating devices:', err);
-        }
-    }, []);
-
-    // Запуск медиа потока (аудио/видео)
-    const startMediaStream = useCallback(async (): Promise<MediaStream | null> => {
-        setMediaError(null);
-        setIsMediaReady(false);
-
-        try {
-            const { isSupported, errors } = checkWebRTCAvailability();
-            if (!isSupported) {
-                throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
-            }
-
-            // Остановка предыдущего потока, если есть
-            if (localMediaStream.current) {
-                localMediaStream.current.getTracks().forEach(track => track.stop());
-                localMediaStream.current = null;
-            }
-
-            // Запрос доступа к медиа устройствам
-            const stream = await navigator.mediaDevices.getUserMedia(
-                getMediaConstraints()
-            );
-            
-            await enumerateDevices();
-            setIsMediaReady(true);
-            return stream;
-        } catch (err) {
-            console.error('Media stream error:', err);
-            setMediaError(err as Error);
-            return null;
-        }
-    }, [getMediaConstraints, enumerateDevices]);
-
-    // Переподключение с полной переинициализацией
-    const reconnect = useCallback(async () => {
-        try {
-            // Закрытие всех существующих соединений
-            Object.values(peerConnections.current).forEach(pc => pc.close());
-            peerConnections.current = {};
-            
-            // Остановка текущего медиа потока
-            if (localMediaStream.current) {
-                localMediaStream.current.getTracks().forEach(track => track.stop());
-                localMediaStream.current = null;
-            }
-
-            // Сброс списка клиентов
-            updateClients([], () => {});
-
-            // Запуск нового медиа потока
-            const stream = await startMediaStream();
-            if (!stream) return;
-
-            localMediaStream.current = stream;
-            // Добавление локального видео
-            addNewClient(LOCAL_VIDEO, () => {
-                const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-                if (localVideo) {
-                    localVideo.srcObject = stream;
-                    localVideo.volume = 0;
-                }
-            });
-
-            // Повторное подключение к комнате
-            if (roomID) {
-                socket.emit(ACTIONS.JOIN, { room: roomID });
-            }
-        } catch (err) {
-            console.error('Reconnection error:', err);
-            setMediaError(err as Error);
-        }
-    }, [roomID, startMediaStream, addNewClient, updateClients]);
-
-    // Переключение состояния медиа (аудио/видео)
-    const toggleMedia = useCallback((type: 'audio' | 'video') => {
-        setMediaState(prev => {
-            const newState = {...prev, [type]: !prev[type]};
-            
-            // Включение/выключение соответствующих треков
-            if (localMediaStream.current) {
-                localMediaStream.current.getTracks()
-                    .filter(track => track.kind === type)
-                    .forEach(track => {
-                        track.enabled = newState[type];
-                    });
-            }
-            
-            return newState;
+      // Обновляем треки во всех соединениях
+      Object.values(peerConnections.current).forEach(pc => {
+        const senders = pc.getSenders();
+        senders.forEach(sender => {
+          if (sender.track?.kind === type) {
+            const newTrack = newTracks.find(t => t.kind === type);
+            if (newTrack) sender.replaceTrack(newTrack);
+          }
         });
-    }, []);
+      });
 
-    // Переключение медиа устройства
-    const switchMediaDevice = useCallback(async (
-        type: 'audio' | 'video',
-        deviceId?: string
-    ): Promise<boolean> => {
-        try {
-            // 1. Останавливаем текущие треки
-            const oldTracks = localMediaStream.current?.getTracks()
-                .filter(track => track.kind === type) || [];
-            
-            oldTracks.forEach(track => {
-                track.stop();
-                localMediaStream.current?.removeTrack(track);
-            });
-    
-            // 2. Создаём новые constraints
-            const constraints: MediaStreamConstraints = {
-                [type]: deviceId ? { deviceId: { exact: deviceId } } : true
-            };
-    
-            // 3. Получаем новый поток
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            const newTracks = stream.getTracks();
-    
-            // 4. Добавляем новые треки в основной поток
-            if (!localMediaStream.current) {
-                localMediaStream.current = new MediaStream();
-            }
-            
-            newTracks.forEach(track => {
-                localMediaStream.current?.addTrack(track);
-                // Сохраняем предыдущее состояние (вкл/выкл)
-                track.enabled = mediaState[type];
-            });
-    
-            // 5. Обновляем все peer соединения
-            Object.values(peerConnections.current).forEach(pc => {
-                const senders = pc.getSenders();
-                senders.forEach(sender => {
-                    if (sender.track?.kind === type) {
-                        const newTrack = newTracks.find(t => t.kind === type);
-                        if (newTrack) {
-                            sender.replaceTrack(newTrack).catch(e => {
-                                console.error('Ошибка при замене трека:', e);
-                            });
-                        }
-                    }
-                });
-            });
-    
-            // 6. Обновляем элемент локального видео
-            const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-            if (localVideo) {
-                localVideo.srcObject = new MediaStream(
-                    localMediaStream.current?.getTracks() || []
-                );
-            }
-    
-            // 7. Обновляем состояние
-            setMediaState(prev => ({
-                ...prev,
-                [type]: newTracks[0]?.enabled ?? prev[type]
-            }));
-    
-            // 8. Обновляем список устройств
-            await enumerateDevices();
-    
-            return true;
-        } catch (err) {
-            console.error(`Ошибка переключения устройства ${type}:`, err);
-            
-            // Восстанавливаем предыдущее состояние при ошибке
-            if (localMediaStream.current) {
-                const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-                if (localVideo) {
-                    localVideo.srcObject = new MediaStream(
-                        localMediaStream.current.getTracks()
-                    );
-                }
-            }
-            
-            return false;
-        }
-    }, [enumerateDevices, mediaState]);
-
-    // Установка peer-to-peer соединения
-    const setupPeerConnection = useCallback(async (
-        peerID: string, 
-        createOffer: boolean  // Нужно ли создавать оффер
-    ) => {
-        if (peerID in peerConnections.current) {
-            return;
-        }
-
-        // Создание нового RTCPeerConnection
-        const pc = new RTCPeerConnection({
-            iceServers: iceServers.current
-        });
-
-        peerConnections.current[peerID] = pc;
-
-        // Обработка ICE кандидатов
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                // Отправка кандидата через сокет
-                socket.emit(ACTIONS.RELAY_ICE, {
-                    peerID,
-                    iceCandidate: event.candidate,
-                });
-            }
-        };
-
-        // Логирование состояния ICE соединения
-        pc.oniceconnectionstatechange = () => {
-            console.log(`ICE state for ${peerID}:`, pc.iceConnectionState);
-        };
-
-        // Получение удаленного медиа потока
-        pc.ontrack = ({ streams: [remoteStream] }) => {
-            if (!remoteStream) return;
-            
-            // Добавление клиента и обновление видео элемента
-            addNewClient(peerID, () => {
-                const element = peerMediaElements.current[peerID];
-                if (element) {
-                    element.srcObject = remoteStream;
-                }
-            });
-        };
-
-        // Добавление локальных треков в соединение
-        if (localMediaStream.current) {
-            localMediaStream.current.getTracks().forEach(track => {
-                pc.addTrack(track, localMediaStream.current!);
-            });
-        }
-
-        // Создание оффера, если требуется
-        if (createOffer) {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit(ACTIONS.RELAY_SDP, {
-                peerID,
-                sessionDescription: offer,
-            });
-        }
-    }, [addNewClient]);
-
-    // Добавление сообщения в чат
-    const addChatMessage = useCallback((message: ChatMessage) => {
-        chatMessages.current = [...chatMessages.current, message];
-    }, []);
-
-    // Получение всех сообщений чата
-    const getChatMessages = useCallback((): ChatMessage[] => {
-        return chatMessages.current;
-    }, []);
-
-    // Эффект инициализации при монтировании
-    useEffect(() => {
-        const { isSupported, errors } = checkWebRTCAvailability();
-        setWebRTCStatus({ isSupported, errors });
-
-        if (!isSupported) {
-            setMediaError(new Error(`WebRTC не поддерживается: ${errors.join(', ')}`));
-            return;
-        }
-
-        let isMounted = true;
-        let stream: MediaStream | null = null;
-
-        async function init() {
-            try {
-                stream = await startMediaStream();
-                if (!isMounted || !stream) return;
-
-                localMediaStream.current = stream;
-                // Добавление локального видео
-                addNewClient(LOCAL_VIDEO, () => {
-                    const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-                    if (localVideo) {
-                        localVideo.srcObject = stream;
-                        localVideo.volume = 0;
-                    }
-                });
-
-                // Подключение к комнате
-                if (roomID) {
-                    socket.emit(ACTIONS.JOIN, { room: roomID });
-                }
-            } catch (err) {
-                console.error('Initialization error:', err);
-                setMediaError(err as Error);
-            }
-        }
-
-        init();
-
-        // Очистка при размонтировании
-        return () => {
-            isMounted = false;
-            // Закрытие всех соединений
-            Object.values(peerConnections.current).forEach(pc => pc.close());
-            peerConnections.current = {};
-
-            // Остановка медиа потоков
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            if (localMediaStream.current) {
-                localMediaStream.current.getTracks().forEach(track => track.stop());
-                localMediaStream.current = null;
-            }
-            
-            // Отправка события выхода
-            socket.emit(ACTIONS.LEAVE);
-        };
-    }, [roomID, startMediaStream, addNewClient]);
-
-    // Эффект для обработки socket событий
-    useEffect(() => {
-        // Обработчики socket событий
-        const handleAddPeer = ({ peerID, createOffer }: { 
-            peerID: string; 
-            createOffer: boolean 
-        }) => {
-            setupPeerConnection(peerID, createOffer);
-        };
-        
-        const handleSessionDescription = async ({ 
-            peerID, 
-            sessionDescription 
-        }: { 
-            peerID: string; 
-            sessionDescription: RTCSessionDescriptionInit 
-        }) => {
-            const pc = peerConnections.current[peerID];
-            if (!pc) return;
-
-            try {
-                await pc.setRemoteDescription(
-                    new RTCSessionDescription(sessionDescription)
-                );
-                if (sessionDescription.type === 'offer') {
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    socket.emit(ACTIONS.RELAY_SDP, {
-                        peerID,
-                        sessionDescription: answer,
-                    });
-                }
-            } catch (err) {
-                console.error('setRemoteDescription error:', err);
-            }
-        };
-        
-        const handleIceCandidate = ({ 
-            peerID, 
-            iceCandidate 
-        }: { 
-            peerID: string; 
-            iceCandidate: RTCIceCandidateInit 
-        }) => {
-            const pc = peerConnections.current[peerID];
-            if (pc) {
-                pc.addIceCandidate(new RTCIceCandidate(iceCandidate))
-                    .catch(err => console.error('addIceCandidate error:', err));
-            }
-        };
-        
-        const handleRemovePeer = ({ peerID }: { peerID: string }) => {
-            const pc = peerConnections.current[peerID];
-            if (pc) {
-                pc.close();
-                delete peerConnections.current[peerID];
-                delete peerMediaElements.current[peerID];
-                updateClients(list => list.filter(c => c !== peerID));
-            }
-        };
-
-        const handleChatHistory = (messages: ChatMessage[]) => {
-            chatMessages.current = messages;
-        };
-
-        const handleChatMessage = (msg: {
-            id: string;
-            message: string;
-            sender: string;
-            timestamp: string;
-        }) => {
-            addChatMessage({
-                id: msg.id,
-                text: msg.message,
-                isLocal: msg.sender === socket.id,
-                timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-                sender: msg.sender
-            });
-        };
-
-        // Регистрация обработчиков
-        const handlers: Record<string, (...args: any[]) => void> = {
-            [ACTIONS.ADD_PEER]: handleAddPeer,
-            [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
-            [ACTIONS.ICE_CANDIDATE]: handleIceCandidate,
-            [ACTIONS.REMOVE_PEER]: handleRemovePeer,
-            [ACTIONS.CHAT_HISTORY]: handleChatHistory,
-            [ACTIONS.CHAT_MESSAGE]: handleChatMessage
-        };
-
-        (Object.entries(handlers) as [keyof typeof ACTIONS, (...args: any[]) => void][]).forEach(
-            ([action, handler]) => {
-                socket.on(action as any, handler);
-            }
+      // Обновляем локальное видео
+      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+      if (localVideo) {
+        localVideo.srcObject = new MediaStream(
+          localMediaStream.current?.getTracks() || []
         );
+      }
 
-        // Отписка от событий при размонтировании
-        return () => {
-            (Object.entries(handlers) as [keyof typeof ACTIONS, (...args: any[]) => void][]).forEach(
-                ([action, handler]) => {
-                    socket.off(action as any, handler);
-                }
-            );
-        };
-    }, [setupPeerConnection, updateClients, addChatMessage]);
+      await enumerateDevices();  // Обновляем список устройств
+      return true;
+    } catch (err) {
+      console.error(`Ошибка переключения устройства ${type}:`, err);
+      return false;
+    }
+  }, [enumerateDevices, mediaState]);
 
-    // Функция для привязки видео элементов
-    const provideMediaRef = useCallback((
-        id: string, 
-        node: HTMLVideoElement | null
-    ) => {
-        if (node) {
-            node.autoplay = true;
-            node.playsInline = true;
-            node.muted = id === LOCAL_VIDEO;  // Отключаем звук для локального видео
-            peerMediaElements.current[id] = node;
-        }
-    }, []);
+  // Функция установки соединения с пиром
+  const setupPeerConnection = useCallback(async (
+    peerID: string, 
+    createOffer: boolean
+  ) => {
+    if (peerID in peerConnections.current) return;
 
-    // Возвращаемые хуком значения
-    return {
-        clients,
-        provideMediaRef,
-        mediaError,
-        isMediaReady,
-        webRTCStatus,
-        mediaState,
-        toggleMedia,
-        switchMediaDevice,
-        availableDevices,
-        addChatMessage,
-        getChatMessages,
-        peerMediaElements,
-        reconnect
+    // Создаем новое соединение
+    const pc = new RTCPeerConnection({ iceServers: iceServers.current });
+    peerConnections.current[peerID] = pc;
+
+    // Добавляем локальные треки ДО создания оффера
+    if (localMediaStream.current) {
+      localMediaStream.current.getTracks().forEach(track => {
+        pc.addTrack(track, localMediaStream.current!);
+      });
+    }
+
+    // Обработчик ICE кандидатов
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit(ACTIONS.RELAY_ICE, {
+          peerID,
+          iceCandidate: event.candidate,
+        });
+      }
     };
+
+    // Обработчик получения удаленного потока
+    pc.ontrack = ({ streams: [remoteStream] }) => {
+      if (!remoteStream) return;
+      addNewClient(peerID, () => {
+        const element = peerMediaElements.current[peerID];
+        if (element) element.srcObject = remoteStream;
+      });
+    };
+
+    // Создаем оффер, если требуется
+    if (createOffer) {
+      try {
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
+        await pc.setLocalDescription(offer);
+        socket.emit(ACTIONS.RELAY_SDP, {
+          peerID,
+          sessionDescription: offer,
+        });
+      } catch (err) {
+        console.error('Ошибка создания оффера:', err);
+      }
+    }
+  }, [addNewClient]);
+
+  // Функции для работы с чатом
+  const addChatMessage = useCallback((message: ChatMessage) => {
+    chatMessages.current = [...chatMessages.current, message];
+  }, []);
+
+  const getChatMessages = useCallback(() => {
+    return chatMessages.current;
+  }, []);
+
+  // Функция привязки видео элементов
+  const provideMediaRef = useCallback((
+    id: string, 
+    node: HTMLVideoElement | null
+  ) => {
+    if (node) {
+      node.autoplay = true;      // Автовоспроизведение
+      node.playsInline = true;   // Встроенное воспроизведение
+      node.muted = id === LOCAL_VIDEO;  // Без звука для локального видео
+      peerMediaElements.current[id] = node;
+    }
+  }, []);
+
+  // Эффект инициализации
+  useEffect(() => {
+    let isMounted = true;
+    let stream: MediaStream | null = null;
+
+    const init = async () => {
+      try {
+        stream = await startMediaStream();
+        if (!isMounted || !stream) return;
+
+        localMediaStream.current = stream;
+        // Настраиваем локальное видео
+        addNewClient(LOCAL_VIDEO, () => {
+          const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+          if (localVideo) {
+            localVideo.srcObject = stream;
+            localVideo.volume = 0;  // Отключаем звук у локального видео
+          }
+        });
+
+        // Присоединяемся к комнате, если указан roomID
+        if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
+      } catch (err) {
+        console.error('Ошибка инициализации:', err);
+        setMediaError(err as Error);
+      }
+    };
+
+    init();
+
+    // Функция очистки при размонтировании
+    return () => {
+      isMounted = false;
+      // Закрываем все соединения
+      Object.values(peerConnections.current).forEach(pc => pc.close());
+      // Останавливаем все треки
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (localMediaStream.current) {
+        localMediaStream.current.getTracks().forEach(track => track.stop());
+      }
+      // Покидаем комнату
+      socket.emit(ACTIONS.LEAVE);
+    };
+  }, [roomID, startMediaStream, addNewClient]);
+
+  // Эффект для обработки socket-событий
+  useEffect(() => {
+    // Обработчик добавления нового пира
+    const handleAddPeer = ({ peerID, createOffer }: { 
+      peerID: string; 
+      createOffer: boolean 
+    }) => {
+      setupPeerConnection(peerID, createOffer);
+    };
+    
+    // Обработчик SDP (Session Description Protocol)
+    const handleSessionDescription = async ({ 
+      peerID, 
+      sessionDescription 
+    }: { 
+      peerID: string; 
+      sessionDescription: RTCSessionDescriptionInit 
+    }) => {
+      const pc = peerConnections.current[peerID];
+      if (!pc) return;
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+        if (sessionDescription.type === 'offer') {
+          // Создаем ответ, если получен оффер
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID,
+            sessionDescription: answer,
+          });
+        }
+      } catch (err) {
+        console.error('Ошибка setRemoteDescription:', err);
+      }
+    };
+    
+    // Обработчик ICE кандидатов
+    const handleIceCandidate = ({ 
+      peerID, 
+      iceCandidate 
+    }: { 
+      peerID: string; 
+      iceCandidate: RTCIceCandidateInit 
+    }) => {
+      const pc = peerConnections.current[peerID];
+      if (pc) pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+    };
+    
+    // Обработчик удаления пира
+    const handleRemovePeer = ({ peerID }: { peerID: string }) => {
+      const pc = peerConnections.current[peerID];
+      if (pc) {
+        pc.close();
+        delete peerConnections.current[peerID];
+        delete peerMediaElements.current[peerID];
+        updateClients(list => list.filter(c => c !== peerID));
+      }
+    };
+
+    // Обработчик сообщений чата
+    const handleChatMessage = (msg: {
+      id: string;
+      message: string;
+      sender: string;
+      timestamp: string;
+    }) => {
+      addChatMessage({
+        ...msg,
+        isLocal: msg.sender === socket.id,  // Помечаем локальные сообщения
+        timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+        text: ''
+      });
+    };
+
+    // Регистрируем обработчики событий
+    const handlers = {
+      [ACTIONS.ADD_PEER]: handleAddPeer,
+      [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
+      [ACTIONS.ICE_CANDIDATE]: handleIceCandidate,
+      [ACTIONS.REMOVE_PEER]: handleRemovePeer,
+      [ACTIONS.CHAT_MESSAGE]: handleChatMessage
+    };
+
+    Object.entries(handlers).forEach(([action, handler]) => {
+      socket.on(action as any, handler);
+    });
+
+    // Отписываемся от событий при размонтировании
+    return () => {
+      Object.entries(handlers).forEach(([action, handler]) => {
+        socket.off(action as any, handler);
+      });
+    };
+  }, [setupPeerConnection, updateClients, addChatMessage]);
+
+  // Возвращаем объект с функциями и состояниями
+  return {
+    clients,
+    provideMediaRef,
+    mediaError,
+    isMediaReady,
+    webRTCStatus,
+    mediaState,
+    toggleMedia,
+    switchMediaDevice,
+    availableDevices,
+    addChatMessage,
+    getChatMessages,
+    peerMediaElements,
+    reconnect
+  };
 }
