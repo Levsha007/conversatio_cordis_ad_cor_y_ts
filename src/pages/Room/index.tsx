@@ -1,13 +1,13 @@
 // Импорт необходимых зависимостей
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
 /**
- * Интерфейс для описания layout видео элементов
+ * Интерфейс для описания параметров расположения видео элементов
  */
 interface LayoutItem {
   width: string;
@@ -36,13 +36,13 @@ const useIsMobile = (): boolean => {
     // Функция проверки размера экрана
     const checkIsMobile = () => setIsMobile(window.innerWidth <= 767);
     
-    // Первоначальная проверка
+    // Первоначальная проверка при монтировании
     checkIsMobile();
     
-    // Подписка на изменение размера окна
+    // Подписка на событие изменения размера окна
     window.addEventListener('resize', checkIsMobile);
     
-    // Отписка при размонтировании
+    // Отписка при размонтировании компонента
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
@@ -56,11 +56,11 @@ const useIsMobile = (): boolean => {
  * @returns {LayoutItem[]} Массив с параметрами layout
  */
 function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
-  // Для мобильных устройств - вертикальный стек
+  // Вертикальный стек для мобильных устройств
   if (isMobile) {
     return Array(clientsCount).fill({
       width: '100%',
-      height: `${100 / Math.min(clientsCount, 4)}%` // Макс 4 участника на экране
+      height: `${100 / Math.min(clientsCount, 4)}%` // Максимум 4 участника на экране
     });
   }
   
@@ -73,9 +73,11 @@ function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutIte
 
   return pairs.map((row, index, arr) => {
     const height = `${100 / pairs.length}%`;
+    // Последний непарный элемент растягиваем на всю ширину
     if (index === arr.length - 1 && row.length === 1) {
       return [{ width: '100%', height }];
     }
+    // Парные элементы - по 50% ширины
     return row.map(() => ({ width: '50%', height }));
   }).flat();
 }
@@ -84,9 +86,11 @@ function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutIte
  * Основной компонент комнаты видеоконференции
  */
 const Room: React.FC = () => {
-  // Хуки навигации и параметров
+  // Хуки навигации и параметров маршрута
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
+  
+  // Определение типа устройства
   const isMobile = useIsMobile();
   
   // Использование кастомного хука WebRTC
@@ -137,11 +141,11 @@ const Room: React.FC = () => {
       await navigator.clipboard.writeText(window.location.href);
       setIsCopied(true);
       
-      // Сброс флага через 2 секунды
+      // Сброс флага "Скопировано" через 2 секунды
       if (copyTimeout.current) clearTimeout(copyTimeout.current);
       copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy link:', err);
+      console.error('Ошибка при копировании ссылки:', err);
     }
   };
 
@@ -167,17 +171,18 @@ const Room: React.FC = () => {
    * Отправка сообщения в чат
    */
   const handleSendMessage = () => {
-    if (messageInput.trim() && roomID) {
+    const trimmedMessage = messageInput.trim();
+    if (trimmedMessage && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
       const newMessage: ChatMessage = {
         id: messageId,
-        text: messageInput,
+        text: trimmedMessage,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
         sender: socket.id || 'unknown'
       };
       
-      // Добавление сообщения локально
+      // Добавление сообщения в локальное состояние
       addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
@@ -185,21 +190,21 @@ const Room: React.FC = () => {
       // Отправка сообщения через сокет
       socket.emit(ACTIONS.CHAT_MESSAGE, { 
         roomID, 
-        message: messageInput,
+        message: trimmedMessage,
         id: messageId,
         timestamp: new Date().toISOString()
       });
     }
   };
 
-  // Автопрокрутка чата к последнему сообщению
+  // Автопрокрутка чата к последнему сообщению при изменении сообщений
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Подписка на сообщения чата
+  // Подписка на сообщения чата и запрос истории
   useEffect(() => {
     /**
      * Обработчик входящих сообщений чата
@@ -211,7 +216,7 @@ const Room: React.FC = () => {
       timestamp: string;
     }) => {
       setMessages(prev => {
-        // Проверка на дубликаты
+        // Проверка на дубликаты сообщений
         if (prev.some(m => m.id === msg.id)) return prev;
         
         return [...prev, {
@@ -224,21 +229,21 @@ const Room: React.FC = () => {
       });
     };
 
-    // Подписка на события чата
+    // Подписка на событие нового сообщения
     socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     
-    // Запрос истории чата при загрузке
+    // Запрос истории чата при загрузке компонента
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
 
-    // Отписка при размонтировании
+    // Отписка от событий при размонтировании компонента
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     };
   }, [roomID]);
 
-  // Обработка ошибок медиа
+  // Обработка и отображение ошибок WebRTC и медиаустройств
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -251,10 +256,10 @@ const Room: React.FC = () => {
       } else if (mediaError?.name === 'NotFoundError') {
         errorMessage = 'Не удалось найти медиаустройства';
       } else {
-        errorMessage = `Ошибка: ${mediaError?.message || 'Unknown error'}`;
+        errorMessage = `Ошибка: ${mediaError?.message || 'Неизвестная ошибка'}`;
       }
 
-      console.error('Error:', errorMessage);
+      console.error('Ошибка медиа:', errorMessage);
       alert(errorMessage);
     }
   }, [mediaError, webRTCStatus, retryCount]);
@@ -262,7 +267,7 @@ const Room: React.FC = () => {
   // Рендер компонента
   return (
     <div className={styles.roomContainer}>
-      {/* Оверлей с ошибками */}
+      {/* Оверлей с ошибками подключения */}
       {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
@@ -303,9 +308,9 @@ const Room: React.FC = () => {
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
-          key={`${clientID}-${retryCount}`}
+          key={`${clientID}-${retryCount}`} // Уникальный ключ с учетом попыток переподключения
           className={styles.videoWrapper}
-          style={videoLayout[index]}
+          style={videoLayout[index]} // Динамические стили расположения
         >
           <video
             ref={instance => provideMediaRef(clientID, instance)}
@@ -316,8 +321,10 @@ const Room: React.FC = () => {
               clientID === LOCAL_VIDEO && !mediaState.video ? styles.videoLocalHidden : ''
             }`}
           />
+          {/* Метка пользователя */}
           <div className={styles.userLabel}>
             {clientID === LOCAL_VIDEO ? 'Вы' : `Участник ${index + 1}`}
+            {/* Индикаторы состояния медиа */}
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
             {!mediaState.video && clientID === LOCAL_VIDEO && <span>📷</span>}
           </div>
@@ -333,6 +340,7 @@ const Room: React.FC = () => {
             mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
           }`}
           title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+          aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
         >
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
@@ -344,6 +352,7 @@ const Room: React.FC = () => {
             mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
           }`}
           title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+          aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
         >
           {mediaState.video ? '📹' : '📷'}
         </button>
@@ -355,6 +364,7 @@ const Room: React.FC = () => {
             showChat ? styles.controlButtonChatActive : styles.controlButtonChat
           }`}
           title={showChat ? 'Скрыть чат' : 'Показать чат'}
+          aria-label={showChat ? 'Скрыть чат' : 'Показать чат'}
         >
           💬
         </button>
@@ -366,6 +376,7 @@ const Room: React.FC = () => {
             showSettings ? styles.controlButtonSettingsActive : styles.controlButtonSettings
           }`}
           title="Настройки"
+          aria-label="Настройки"
         >
           ⚙️
         </button>
@@ -375,6 +386,7 @@ const Room: React.FC = () => {
           onClick={handleCopyLink}
           className={`${styles.controlButton} ${styles.copyButton}`}
           title="Скопировать ссылку на комнату"
+          aria-label="Скопировать ссылку на комнату"
         >
           <span>🔗</span>
           {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
@@ -385,6 +397,7 @@ const Room: React.FC = () => {
           onClick={handleLeaveRoom}
           className={`${styles.controlButton} ${styles.controlButtonLeave}`}
           title="Выйти из комнаты"
+          aria-label="Выйти из комнаты"
         >
           🚪
         </button>
@@ -398,6 +411,7 @@ const Room: React.FC = () => {
             <button 
               onClick={() => setShowChat(false)}
               className={styles.chatCloseButton}
+              aria-label="Закрыть чат"
             >
               ×
             </button>
@@ -406,6 +420,7 @@ const Room: React.FC = () => {
           <div 
             ref={chatContainerRef}
             className={styles.chatMessages}
+            aria-live="polite"
           >
             {messages.length === 0 ? (
               <div className={styles.noMessages}>
@@ -444,6 +459,7 @@ const Room: React.FC = () => {
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
+              aria-label="Введите сообщение"
             />
             <button
               onClick={handleSendMessage}
@@ -451,6 +467,7 @@ const Room: React.FC = () => {
               className={`${styles.chatSendButton} ${
                 !messageInput.trim() ? styles.chatSendButtonDisabled : ''
               }`}
+              aria-label="Отправить сообщение"
             >
               Отправить
             </button>
@@ -466,6 +483,7 @@ const Room: React.FC = () => {
             <button 
               onClick={() => setShowSettings(false)}
               className={styles.settingsCloseButton}
+              aria-label="Закрыть настройки"
             >
               ×
             </button>
@@ -473,12 +491,14 @@ const Room: React.FC = () => {
 
           {/* Выбор микрофона */}
           <div className={styles.settingsSection}>
-            <label className={styles.settingsLabel}>
+            <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
               Микрофон:
             </label>
             <select
+              id="audioDeviceSelect"
               onChange={(e) => switchMediaDevice('audio', e.target.value)}
               className={styles.settingsSelect}
+              aria-label="Выберите микрофон"
             >
               {availableDevices.audio.map((device, index) => (
                 <option key={device.deviceId} value={device.deviceId}>
@@ -490,12 +510,14 @@ const Room: React.FC = () => {
 
           {/* Выбор камеры */}
           <div className={styles.settingsSection}>
-            <label className={styles.settingsLabel}>
+            <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
               Камера:
             </label>
             <select
+              id="videoDeviceSelect"
               onChange={(e) => switchMediaDevice('video', e.target.value)}
               className={styles.settingsSelect}
+              aria-label="Выберите камеру"
             >
               {availableDevices.video.map((device, index) => (
                 <option key={device.deviceId} value={device.deviceId}>
