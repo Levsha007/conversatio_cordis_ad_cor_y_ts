@@ -1,30 +1,43 @@
+/* Основной контейнер комнаты */
 .roomContainer {
     display: flex;
     flex-wrap: wrap;
     height: 100vh;
     background-color: #000;
-}
-
-.videoWrapper {
+    transition: all 0.3s ease;
+    /* Плавные переходы для всех анимируемых свойств */
+  }
+  
+  /* Стили для обёртки видео элементов */
+  .videoWrapper {
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
     overflow: hidden;
     background-color: #000;
-}
-
-.video {
+    transition: transform 0.2s ease;
+    /* Плавное изменение размера при адаптации */
+  }
+  
+  /* Базовые стили для видео элементов */
+  .video {
     width: 100%;
     height: 100%;
     object-fit: contain;
-}
-
-.videoLocalHidden {
+    transition: opacity 0.3s ease;
+    /* Плавное появление/исчезновение видео */
+  }
+  
+  /* Состояние, когда локальное видео скрыто */
+  .videoLocalHidden {
     background-color: #000 !important;
-}
-
-.userLabel {
+    opacity: 0.3;
+    /* Полупрозрачность для скрытого видео */
+  }
+  
+  /* Метка пользователя (имя/статус) */
+  .userLabel {
     position: absolute;
     bottom: 10px;
     left: 10px;
@@ -36,9 +49,12 @@
     display: flex;
     align-items: center;
     gap: 5px;
-}
-
-.controls {
+    transition: background-color 0.2s ease;
+    /* Плавное изменение фона при наведении */
+  }
+  
+  /* Панель управления (кнопки внизу экрана) */
+  .controls {
     position: fixed;
     bottom: 20px;
     left: 50%;
@@ -46,9 +62,12 @@
     display: flex;
     gap: 10px;
     z-index: 100;
-}
-
-.controlButton {
+    transition: opacity 0.3s ease;
+    /* Плавное появление/исчезновение панели */
+  }
+  
+  /* Базовые стили кнопок управления */
+  .controlButton {
     padding: 10px;
     border-radius: 50%;
     border: none;
@@ -59,45 +78,63 @@
     justify-content: center;
     width: 50px;
     height: 50px;
-}
-
-.controlButtonMicOn {
+    transition: all 0.2s ease;
+    /* Плавные анимации для всех свойств кнопок */
+  }
+  
+  /* Эффект при наведении на кнопки */
+  .controlButton:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+  
+  /* Стили для кнопки включённого микрофона */
+  .controlButtonMicOn {
     background: #4CAF50;
-}
-
-.controlButtonMicOff {
+  }
+  
+  /* Стили для кнопки выключенного микрофона */
+  .controlButtonMicOff {
     background: #f44336;
-}
-
-.controlButtonCamOn {
+  }
+  
+  /* Стили для кнопки включённой камеры */
+  .controlButtonCamOn {
     background: #4CAF50;
-}
-
-.controlButtonCamOff {
+  }
+  
+  /* Стили для кнопки выключенной камеры */
+  .controlButtonCamOff {
     background: #f44336;
-}
-
-.controlButtonChat {
+  }
+  
+  /* Стили для кнопки чата (неактивное состояние) */
+  .controlButtonChat {
     background: #555;
-}
-
-.controlButtonChatActive {
+  }
+  
+  /* Стили для кнопки чата (активное состояние) */
+  .controlButtonChatActive {
     background: #2196F3;
-}
-
-.controlButtonSettings {
+  }
+  
+  /* Стили для кнопки настроек (неактивное состояние) */
+  .controlButtonSettings {
     background: #555;
-}
-
-.controlButtonSettingsActive {
+  }
+  
+  /* Стили для кнопки настроек (активное состояние) */
+  .controlButtonSettingsActive {
     background: #FF9800;
-}
-
-.controlButtonLeave {
+  }
+  
+  /* Стили для кнопки выхода из комнаты */
+  .controlButtonLeave {
     background: #f44336;
-}
-
-.chatContainer {
+  }
+  
+  /* Контейнер чата */
+  .chatContainer {
     position: fixed;
     right: 20px;
     bottom: 80px;
@@ -109,98 +146,146 @@
     flex-direction: column;
     z-index: 100;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-.chatHeader {
+    transform: translateY(0);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    /* Анимации открытия/закрытия чата */
+  }
+  
+  /* Шапка чата */
+  .chatHeader {
     padding: 10px;
     border-bottom: 1px solid #eee;
     font-weight: bold;
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.chatCloseButton {
+  }
+  
+  /* Кнопка закрытия чата */
+  .chatCloseButton {
     background: none;
     border: none;
     cursor: pointer;
     font-size: 1.2rem;
-}
-
-.chatMessages {
+    transition: transform 0.2s ease;
+  }
+  
+  /* Эффект при наведении на кнопку закрытия */
+  .chatCloseButton:hover {
+    transform: scale(1.2);
+  }
+  
+  /* Область сообщений чата */
+  .chatMessages {
     flex: 1;
     overflow-y: auto;
     padding: 10px;
-}
-
-.noMessages {
+    scroll-behavior: smooth;
+    /* Плавная прокрутка сообщений */
+  }
+  
+  /* Стиль для пустого чата */
+  .noMessages {
     color: #999;
     text-align: center;
     margin-top: 50%;
-}
-
-.message {
+    opacity: 0.7;
+  }
+  
+  /* Стили для сообщений */
+  .message {
     margin-bottom: 10px;
     text-align: left;
-}
-
-.messageLocal {
+    animation: fadeIn 0.3s ease;
+    /* Анимация появления сообщения */
+  }
+  
+  /* Стили для локальных сообщений (выравнивание справа) */
+  .messageLocal {
     text-align: right;
-}
-
-.messageBubble {
+  }
+  
+  /* Пузырь сообщения */
+  .messageBubble {
     display: inline-block;
     padding: 8px 12px;
     border-radius: 15px;
     max-width: 80%;
     word-break: break-word;
-}
-
-.messageBubbleLocal {
+    transition: background-color 0.2s ease;
+  }
+  
+  /* Пузырь локального сообщения */
+  .messageBubbleLocal {
     background: #DCF8C6;
-}
-
-.messageBubbleRemote {
+  }
+  
+  /* Пузырь удалённого сообщения */
+  .messageBubbleRemote {
     background: #ECECEC;
-}
-
-.messageTime {
+  }
+  
+  /* Время сообщения */
+  .messageTime {
     font-size: 0.7em;
     color: #999;
     margin-top: 3px;
-}
-
-.chatInputContainer {
+    transition: color 0.2s ease;
+  }
+  
+  /* Контейнер ввода сообщения */
+  .chatInputContainer {
     padding: 10px;
     border-top: 1px solid #eee;
     display: flex;
-}
-
-.chatInput {
+    gap: 8px;
+    transition: border-color 0.3s ease;
+  }
+  
+  /* Поле ввода текста */
+  .chatInput {
     flex: 1;
     padding: 10px;
     border-radius: 20px;
     border: 1px solid #ddd;
     outline: none;
     font-size: 0.9rem;
-}
-
-.chatSendButton {
-    margin-left: 10px;
-    padding: 0 15px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  /* Стиль поля ввода при фокусе */
+  .chatInput:focus {
+    border-color: #2196F3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+  }
+  
+  /* Кнопка отправки сообщения */
+  .chatSendButton {
+    padding: 0 12px;
     background: #4CAF50;
     color: white;
     border: none;
     border-radius: 20px;
     cursor: pointer;
-    font-size: 0.9rem;
-}
-
-.chatSendButtonDisabled {
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+  
+  /* Эффект при наведении на кнопку отправки */
+  .chatSendButton:hover:not(:disabled) {
+    background: #45a049;
+    transform: scale(1.05);
+  }
+  
+  /* Стиль для неактивной кнопки отправки */
+  .chatSendButtonDisabled {
     opacity: 0.5;
-}
-
-.settingsPanel {
+    cursor: not-allowed;
+  }
+  
+  /* Панель настроек */
+  .settingsPanel {
     position: fixed;
     top: 20px;
     right: 20px;
@@ -210,40 +295,62 @@
     z-index: 100;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
     min-width: 250px;
-}
-
-.settingsHeader {
+    transform: translateY(0);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  
+  /* Шапка панели настроек */
+  .settingsHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
-}
-
-.settingsCloseButton {
+  }
+  
+  /* Кнопка закрытия настроек */
+  .settingsCloseButton {
     background: none;
     border: none;
     cursor: pointer;
     font-size: 1.2rem;
-}
-
-.settingsSection {
+    transition: transform 0.2s ease;
+  }
+  
+  /* Эффект при наведении на кнопку закрытия настроек */
+  .settingsCloseButton:hover {
+    transform: scale(1.2);
+  }
+  
+  /* Секция в настройках */
+  .settingsSection {
     margin-bottom: 15px;
-}
-
-.settingsLabel {
+  }
+  
+  /* Лейбл в настройках */
+  .settingsLabel {
     display: block;
     margin-bottom: 5px;
     font-weight: bold;
-}
-
-.settingsSelect {
+    transition: color 0.2s ease;
+  }
+  
+  /* Выпадающий список в настройках */
+  .settingsSelect {
     width: 100%;
     padding: 8px;
     border-radius: 5px;
     border: 1px solid #ddd;
-}
-
-.errorOverlay {
+    transition: border-color 0.3s ease;
+  }
+  
+  /* Стиль выпадающего списка при фокусе */
+  .settingsSelect:focus {
+    border-color: #2196F3;
+    outline: none;
+  }
+  
+  /* Оверлей ошибок */
+  .errorOverlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -258,20 +365,24 @@
     background-color: rgba(0,0,0,0.7);
     text-align: center;
     padding: 20px;
-}
-
-.errorTitle {
+    animation: fadeIn 0.5s ease;
+  }
+  
+  /* Заголовок ошибки */
+  .errorTitle {
     margin-bottom: 20px;
     font-size: 1.5rem;
-}
-
-.errorDescription {
+  }
+  
+  /* Описание ошибки */
+  .errorDescription {
     max-width: 80%;
     white-space: pre-line;
     margin-bottom: 20px;
-}
-
-.retryButton {
+  }
+  
+  /* Кнопка повтора */
+  .retryButton {
     padding: 10px 20px;
     background-color: #4CAF50;
     color: white;
@@ -279,48 +390,34 @@
     border-radius: 5px;
     cursor: pointer;
     font-size: 1rem;
-    transition: background-color 0.3s;
-}
-
-.retryButton:hover {
-    background-color: #45a049;
-}
-
-@media (max-width: 767px) {
-    .roomContainer {
-        flex-direction: column;
-        flex-wrap: nowrap;
-    }
-    
-    .chatContainer {
-        right: 10px;
-        bottom: 70px;
-        width: calc(100% - 20px);
-        height: 40%;
-    }
-    
-    .videoWrapper {
-        width: 100% !important;
-        height: auto !important;
-        aspect-ratio: 16/9;
-    }
-    
-    .video {
-        width: 100%;
-        height: auto;
-    }
-}
-
-/* Добавить новые стили */
-.copyButton {
-    position: relative;
-    background: #555;
+    transition: all 0.2s ease;
   }
   
+  /* Эффект при наведении на кнопку повтора */
+  .retryButton:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+  }
+  
+  /* Анимация плавного появления */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  /* Стили для кнопки копирования */
+  .copyButton {
+    position: relative;
+    background: #555;
+    transition: background 0.2s ease;
+  }
+  
+  /* Эффект при наведении на кнопку копирования */
   .copyButton:hover {
     background: #666;
   }
   
+  /* Лейбл подтверждения копирования */
   .copyLabel {
     position: absolute;
     top: -30px;
@@ -332,52 +429,81 @@
     border-radius: 4px;
     font-size: 0.8rem;
     white-space: nowrap;
+    animation: fadeIn 0.3s ease;
   }
   
-  /* Исправить ширину кнопки на главной странице */
-  .createButton {
-    width: auto;
-    min-width: 200px;
-    padding: 12px 24px;
-    margin: 0 auto;
-  }
-
+  /* Имя отправителя в чате */
   .messageSender {
     font-weight: bold;
     font-size: 0.8rem;
     margin-bottom: 4px;
     color: #555;
+    transition: color 0.2s ease;
   }
   
+  /* Имя отправителя для локальных сообщений */
   .messageLocal .messageSender {
     text-align: right;
-    color: #2ecc71; /* Зеленый для ваших сообщений */
-  }
-
-  .chatInputContainer {
-    display: flex;
-    padding: 10px;
-    border-top: 1px solid #eee;
-    gap: 8px; /* Добавляем отступ между элементами */
+    color: #2ecc71;
   }
   
-  .chatInput {
-    flex: 1;
-    padding: 10px;
-    border-radius: 20px;
-    border: 1px solid #ddd;
-    outline: none;
-    font-size: 0.9rem;
-    min-width: 0; /* Важно для корректного сжатия */
-  }
-  
-  .chatSendButton {
-    padding: 0 12px; /* Уменьшаем горизонтальные отступы */
-    background: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 20px;
-    cursor: pointer;
-    white-space: nowrap; /* Текст не переносится */
-    flex-shrink: 0; /* Запрещаем сжатие */
+  /* Мобильная адаптация */
+  @media (max-width: 767px) {
+    .roomContainer {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      height: auto;
+      min-height: 100vh;
+    }
+    
+    .videoWrapper {
+      width: 100% !important;
+      height: 50vh !important;
+      min-height: 300px;
+      aspect-ratio: 16/9;
+    }
+    
+    /* Специфичные стили для разного количества участников */
+    .videoWrapper:only-child {
+      height: 100vh !important;
+    }
+    
+    .videoWrapper:nth-child(1):nth-last-child(2),
+    .videoWrapper:nth-child(2):nth-last-child(1) {
+      height: 50vh !important;
+    }
+    
+    .videoWrapper:nth-child(1):nth-last-child(3),
+    .videoWrapper:nth-child(2):nth-last-child(2),
+    .videoWrapper:nth-child(3):nth-last-child(1) {
+      height: calc(100vh / 3) !important;
+    }
+    
+    .chatContainer {
+      position: relative;
+      right: auto;
+      bottom: auto;
+      width: 100%;
+      height: auto;
+      max-height: 40vh;
+      border-radius: 0;
+      order: 1;
+    }
+    
+    .controls {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 95%;
+      gap: 5px;
+    }
+    
+    .controlButton {
+      width: 40px;
+      height: 40px;
+      font-size: 0.9em;
+    }
   }

@@ -6,12 +6,17 @@ import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
-// Интерфейсы для типизации
+/**
+ * Интерфейс для описания layout видео элементов
+ */
 interface LayoutItem {
   width: string;
   height: string;
 }
 
+/**
+ * Интерфейс для сообщений чата
+ */
 interface ChatMessage {
   id: string;
   text: string;
@@ -20,49 +25,69 @@ interface ChatMessage {
   sender: string;
 }
 
-// Кастомный хук для определения мобильного устройства
+/**
+ * Кастомный хук для определения мобильного устройства
+ * @returns {boolean} Флаг, является ли устройство мобильным
+ */
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    // Функция проверки размера экрана
     const checkIsMobile = () => setIsMobile(window.innerWidth <= 767);
+    
+    // Первоначальная проверка
     checkIsMobile();
+    
+    // Подписка на изменение размера окна
     window.addEventListener('resize', checkIsMobile);
+    
+    // Отписка при размонтировании
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
   return isMobile;
 };
 
-// Функция расчета расположения видео элементов
-function calculateLayout(clientsCount: number = 1): LayoutItem[] {
-  // Разбиваем клиентов на пары для сетки 2x2
-  const pairs = Array.from({ length: clientsCount }).reduce<Array<Array<undefined>>>(
-    (acc, _, index, arr) => {
+/**
+ * Функция расчета расположения видео элементов
+ * @param {number} clientsCount - Количество клиентов
+ * @param {boolean} isMobile - Флаг мобильного устройства
+ * @returns {LayoutItem[]} Массив с параметрами layout
+ */
+function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
+  // Для мобильных устройств - вертикальный стек
+  if (isMobile) {
+    return Array(clientsCount).fill({
+      width: '100%',
+      height: `${100 / Math.min(clientsCount, 4)}%` // Макс 4 участника на экране
+    });
+  }
+  
+  // Для десктопа - сетка 2x2
+  const pairs = Array.from({ length: clientsCount })
+    .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
       if (index % 2 === 0) acc.push(arr.slice(index, index + 2) as undefined[]);
       return acc;
     }, []);
 
-  // Рассчитываем размеры для каждого элемента
   return pairs.map((row, index, arr) => {
     const height = `${100 / pairs.length}%`;
-    
-    // Если последний элемент один - растягиваем на всю ширину
     if (index === arr.length - 1 && row.length === 1) {
       return [{ width: '100%', height }];
     }
-
-    // Иначе - 50% ширины
     return row.map(() => ({ width: '50%', height }));
   }).flat();
 }
 
-// Основной компонент комнаты
+/**
+ * Основной компонент комнаты видеоконференции
+ */
 const Room: React.FC = () => {
-  // Хуки навигации и параметров URL
+  // Хуки навигации и параметров
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const { id: roomID } = useParams<{ id: string }>();
+  const isMobile = useIsMobile();
   
   // Использование кастомного хука WebRTC
   const { 
@@ -80,9 +105,9 @@ const Room: React.FC = () => {
     peerMediaElements,
     reconnect
   } = useWebRTC(roomID || '');
-  
-  // Состояния и рефы компонента
-  const videoLayout = calculateLayout(clients.length);
+
+  // Состояния компонента
+  const videoLayout = calculateLayout(clients.length, isMobile);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
   const [messageInput, setMessageInput] = useState('');
@@ -93,18 +118,26 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Функция получения метки отправителя
+  /**
+   * Получение метки отправителя сообщения
+   * @param {string} senderId - ID отправителя
+   * @returns {string} Понятное имя отправителя
+   */
   const getSenderLabel = (senderId: string): string => {
     if (senderId === socket.id) return 'Вы';
     const peerIndex = clients.indexOf(senderId);
     return peerIndex !== -1 ? `Участник ${peerIndex + 1}` : 'Неизвестный';
   };
 
-  // Копирование ссылки на комнату
+  /**
+   * Копирование ссылки на комнату в буфер обмена
+   */
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setIsCopied(true);
+      
+      // Сброс флага через 2 секунды
       if (copyTimeout.current) clearTimeout(copyTimeout.current);
       copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
@@ -112,21 +145,27 @@ const Room: React.FC = () => {
     }
   };
 
-  // Выход из комнаты
+  /**
+   * Выход из комнаты с подтверждением
+   */
   const handleLeaveRoom = () => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       navigate('/');
     }
   };
 
-  // Повторная попытка подключения
+  /**
+   * Повторная попытка подключения
+   */
   const handleRetry = async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   };
 
-  // Отправка сообщения в чат
+  /**
+   * Отправка сообщения в чат
+   */
   const handleSendMessage = () => {
     if (messageInput.trim() && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
@@ -138,12 +177,12 @@ const Room: React.FC = () => {
         sender: socket.id || 'unknown'
       };
       
-      // Добавляем сообщение локально
+      // Добавление сообщения локально
       addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
       
-      // Отправляем сообщение через сокет
+      // Отправка сообщения через сокет
       socket.emit(ACTIONS.CHAT_MESSAGE, { 
         roomID, 
         message: messageInput,
@@ -162,6 +201,9 @@ const Room: React.FC = () => {
 
   // Подписка на сообщения чата
   useEffect(() => {
+    /**
+     * Обработчик входящих сообщений чата
+     */
     const chatMessageHandler = (msg: {
       id: string;
       message: string;
@@ -169,7 +211,9 @@ const Room: React.FC = () => {
       timestamp: string;
     }) => {
       setMessages(prev => {
+        // Проверка на дубликаты
         if (prev.some(m => m.id === msg.id)) return prev;
+        
         return [...prev, {
           id: msg.id,
           text: msg.message,
@@ -180,16 +224,17 @@ const Room: React.FC = () => {
       });
     };
 
-    // Подписываемся на события чата
-    socket.on(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
+    // Подписка на события чата
+    socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
+    
+    // Запрос истории чата при загрузке
     if (roomID) {
-      // Запрашиваем историю чата при загрузке
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
 
-    // Отписываемся при размонтировании
+    // Отписка при размонтировании
     return () => {
-      socket.off(ACTIONS.CHAT_MESSAGE as any, chatMessageHandler);
+      socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     };
   }, [roomID]);
 
