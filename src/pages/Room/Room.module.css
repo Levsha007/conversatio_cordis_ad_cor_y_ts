@@ -5,7 +5,6 @@
   height: 100vh;
   background-color: #000;
   transition: all 0.3s ease;
-  /* Плавные переходы для всех анимируемых свойств */
 }
 
 /* Стили для обёртки видео элементов */
@@ -17,7 +16,6 @@
   overflow: hidden;
   background-color: #000;
   transition: transform 0.2s ease;
-  /* Плавное изменение размера при адаптации */
 }
 
 /* Базовые стили для видео элементов */
@@ -26,14 +24,12 @@
   height: 100%;
   object-fit: contain;
   transition: opacity 0.3s ease;
-  /* Плавное появление/исчезновение видео */
 }
 
 /* Состояние, когда локальное видео скрыто */
 .videoLocalHidden {
   background-color: #000 !important;
   opacity: 0.3;
-  /* Полупрозрачность для скрытого видео */
 }
 
 /* Метка пользователя (имя/статус) */
@@ -50,7 +46,6 @@
   align-items: center;
   gap: 5px;
   transition: background-color 0.2s ease;
-  /* Плавное изменение фона при наведении */
 }
 
 /* Панель управления (кнопки внизу экрана) */
@@ -63,7 +58,6 @@
   gap: 10px;
   z-index: 100;
   transition: opacity 0.3s ease;
-  /* Плавное появление/исчезновение панели */
 }
 
 /* Базовые стили кнопок управления */
@@ -79,7 +73,6 @@
   width: 50px;
   height: 50px;
   transition: all 0.2s ease;
-  /* Плавные анимации для всех свойств кнопок */
 }
 
 /* Эффект при наведении на кнопки */
@@ -133,20 +126,20 @@
   background: #f44336;
 }
 
-/* Контейнер чата (обновлённый с прозрачностью) */
+/* Контейнер чата с настройками прозрачности */
 .chatContainer {
   position: fixed;
   right: 20px;
   bottom: 80px;
   width: 300px;
   height: 400px;
-  background-color: rgba(255, 255, 255, 0.85); /* Полупрозрачный фон */
+  background-color: rgba(255, 255, 255, 0.65); /* Прозрачность фона 65% */
   border-radius: 10px;
   display: flex;
   flex-direction: column;
   z-index: 100;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(5px); /* Размытие фона */
+  backdrop-filter: blur(5px);
   border: 1px solid rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
@@ -169,6 +162,7 @@
   cursor: pointer;
   font-size: 1.2rem;
   transition: transform 0.2s ease;
+  opacity: 0.85; /* Прозрачность 85% */
 }
 
 /* Эффект при наведении на кнопку закрытия */
@@ -183,7 +177,6 @@
   padding: 10px;
   scroll-behavior: smooth;
   background-color: transparent;
-  /* Плавная прокрутка сообщений */
 }
 
 /* Стиль для пустого чата */
@@ -199,10 +192,9 @@
   margin-bottom: 10px;
   text-align: left;
   animation: fadeIn 0.3s ease;
-  /* Анимация появления сообщения */
 }
 
-/* Стили для локальных сообщений (выравнивание справа) */
+/* Стили для локальных сообщений */
 .messageLocal {
   text-align: right;
 }
@@ -214,18 +206,22 @@
   border-radius: 15px;
   max-width: 80%;
   word-break: break-word;
-  background-color: rgba(255, 255, 255, 0.9); /* Почти непрозрачный фон */
-  transition: background-color 0.2s ease;
+  background-color: rgba(255, 255, 255, 0.7); /* Прозрачность 70% */
 }
 
 /* Пузырь локального сообщения */
 .messageBubbleLocal {
-  background: rgba(220, 248, 198, 0.95); /* Зеленый с малой прозрачностью */
+  background: rgba(220, 248, 198, 0.75); /* Прозрачность 75% */
 }
 
 /* Пузырь удалённого сообщения */
 .messageBubbleRemote {
-  background: rgba(236, 236, 236, 0.95); /* Серый с малой прозрачностью */
+  background: rgba(236, 236, 236, 0.75); /* Прозрачность 75% */
+}
+
+/* Текст сообщения с прозрачностью 60% */
+.messageText {
+  opacity: 0.6 !important;
 }
 
 /* Время сообщения */
@@ -233,8 +229,7 @@
   font-size: 0.7em;
   color: #555;
   margin-top: 3px;
-  transition: color 0.2s ease;
-  opacity: 0.9; /* Почти непрозрачный */
+  opacity: 0.8; /* Прозрачность 80% */
 }
 
 /* Контейнер ввода сообщения */
@@ -244,7 +239,6 @@
   display: flex;
   gap: 8px;
   background-color: transparent;
-  transition: border-color 0.3s ease;
 }
 
 /* Поле ввода текста */
@@ -255,8 +249,7 @@
   border: 1px solid rgba(0, 0, 0, 0.1);
   outline: none;
   font-size: 0.9rem;
-  background-color: rgba(255, 255, 255, 0.8);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.65); /* Прозрачность 65% */
 }
 
 /* Стиль поля ввода при фокусе */
@@ -268,20 +261,17 @@
 /* Кнопка отправки сообщения */
 .chatSendButton {
   padding: 0 12px;
-  background: rgba(76, 175, 80, 0.9);
+  background: rgba(76, 175, 80, 0.8); /* Прозрачность 80% */
   color: white;
   border: none;
   border-radius: 20px;
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
 /* Эффект при наведении на кнопку отправки */
 .chatSendButton:hover:not(:disabled) {
-  background: rgba(69, 160, 73, 0.9);
-  transform: scale(1.05);
+  background: rgba(69, 160, 73, 0.85); /* Прозрачность 85% */
 }
 
 /* Стиль для неактивной кнопки отправки */
