@@ -1,6 +1,6 @@
 // Импорт необходимых зависимостей
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
@@ -33,16 +33,9 @@ const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Функция проверки размера экрана
     const checkIsMobile = () => setIsMobile(window.innerWidth <= 767);
-    
-    // Первоначальная проверка при монтировании
     checkIsMobile();
-    
-    // Подписка на событие изменения размера окна
     window.addEventListener('resize', checkIsMobile);
-    
-    // Отписка при размонтировании компонента
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
@@ -50,21 +43,56 @@ const useIsMobile = (): boolean => {
 };
 
 /**
+ * Кастомный хук для синхронизации вкладок и предотвращения дубликатов
+ * @param roomId - ID комнаты
+ */
+const useTabSync = (roomId: string) => {
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (!roomId) return;
+
+    // Создаем уникальный идентификатор для текущей вкладки
+    const tabId = sessionStorage.getItem(`vc_tab_${roomId}`) || Date.now().toString();
+    sessionStorage.setItem(`vc_tab_${roomId}`, tabId);
+
+    // Создаем канал для обмена сообщениями между вкладками
+    const channel = new BroadcastChannel(`vc_${roomId}`);
+
+    const handleMessage = (e: MessageEvent) => {
+      // Если другая вкладка с таким же roomId активна
+      if (e.data.type === 'TAB_ACTIVE' && e.data.tabId !== tabId) {
+        // Закрываем соединение и перенаправляем на главную
+        socket.emit(ACTIONS.LEAVE);
+        navigate('/', { replace: true });
+      }
+    };
+
+    channel.addEventListener('message', handleMessage);
+
+    // Сообщаем другим вкладкам о своем существовании
+    channel.postMessage({ type: 'TAB_ACTIVE', tabId });
+
+    // Очистка при размонтировании компонента
+    return () => {
+      channel.removeEventListener('message', handleMessage);
+      channel.close();
+      sessionStorage.removeItem(`vc_tab_${roomId}`);
+    };
+  }, [roomId, navigate]);
+};
+
+/**
  * Функция расчета расположения видео элементов
- * @param {number} clientsCount - Количество клиентов
- * @param {boolean} isMobile - Флаг мобильного устройства
- * @returns {LayoutItem[]} Массив с параметрами layout
  */
 function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
-  // Вертикальный стек для мобильных устройств
   if (isMobile) {
     return Array(clientsCount).fill({
       width: '100%',
-      height: `${100 / Math.min(clientsCount, 4)}%` // Максимум 4 участника на экране
+      height: `${100 / Math.min(clientsCount, 4)}%`
     });
   }
   
-  // Для десктопа - сетка 2x2
   const pairs = Array.from({ length: clientsCount })
     .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
       if (index % 2 === 0) acc.push(arr.slice(index, index + 2) as undefined[]);
@@ -73,11 +101,9 @@ function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutIte
 
   return pairs.map((row, index, arr) => {
     const height = `${100 / pairs.length}%`;
-    // Последний непарный элемент растягиваем на всю ширину
     if (index === arr.length - 1 && row.length === 1) {
       return [{ width: '100%', height }];
     }
-    // Парные элементы - по 50% ширины
     return row.map(() => ({ width: '50%', height }));
   }).flat();
 }
@@ -89,7 +115,11 @@ const Room: React.FC = () => {
   // Хуки навигации и параметров маршрута
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
+  const { search } = useLocation();
   
+  // Используем хук для синхронизации вкладок
+  useTabSync(roomID || '');
+
   // Определение типа устройства
   const isMobile = useIsMobile();
   
@@ -124,8 +154,6 @@ const Room: React.FC = () => {
 
   /**
    * Получение метки отправителя сообщения
-   * @param {string} senderId - ID отправителя
-   * @returns {string} Понятное имя отправителя
    */
   const getSenderLabel = (senderId: string): string => {
     if (senderId === socket.id) return 'Вы';
@@ -141,7 +169,6 @@ const Room: React.FC = () => {
       await navigator.clipboard.writeText(window.location.href);
       setIsCopied(true);
       
-      // Сброс флага "Скопировано" через 2 секунды
       if (copyTimeout.current) clearTimeout(copyTimeout.current);
       copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
@@ -182,12 +209,10 @@ const Room: React.FC = () => {
         sender: socket.id || 'unknown'
       };
       
-      // Добавление сообщения в локальное состояние
       addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
       
-      // Отправка сообщения через сокет
       socket.emit(ACTIONS.CHAT_MESSAGE, { 
         roomID, 
         message: trimmedMessage,
@@ -197,7 +222,7 @@ const Room: React.FC = () => {
     }
   };
 
-  // Автопрокрутка чата к последнему сообщению при изменении сообщений
+  // Автопрокрутка чата к последнему сообщению
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -206,9 +231,6 @@ const Room: React.FC = () => {
 
   // Подписка на сообщения чата и запрос истории
   useEffect(() => {
-    /**
-     * Обработчик входящих сообщений чата
-     */
     const chatMessageHandler = (msg: {
       id: string;
       message: string;
@@ -216,7 +238,6 @@ const Room: React.FC = () => {
       timestamp: string;
     }) => {
       setMessages(prev => {
-        // Проверка на дубликаты сообщений
         if (prev.some(m => m.id === msg.id)) return prev;
         
         return [...prev, {
@@ -229,15 +250,12 @@ const Room: React.FC = () => {
       });
     };
 
-    // Подписка на событие нового сообщения
     socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     
-    // Запрос истории чата при загрузке компонента
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
 
-    // Отписка от событий при размонтировании компонента
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     };
@@ -308,9 +326,9 @@ const Room: React.FC = () => {
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
-          key={`${clientID}-${retryCount}`} // Уникальный ключ с учетом попыток переподключения
+          key={`${clientID}-${retryCount}`}
           className={styles.videoWrapper}
-          style={videoLayout[index]} // Динамические стили расположения
+          style={videoLayout[index]}
         >
           <video
             ref={instance => provideMediaRef(clientID, instance)}
