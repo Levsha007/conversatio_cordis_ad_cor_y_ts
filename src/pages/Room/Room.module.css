@@ -232,7 +232,7 @@
   opacity: 0.8; /* Прозрачность 80% */
 }
 
-/* Контейнер ввода сообщения */
+/* Поле ввода сообщения и отправка файла */
 .chatInputContainer {
   padding: 10px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
@@ -278,6 +278,40 @@
 .chatSendButtonDisabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Форма прикрепления файла */
+.fileInput {
+  padding: 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.65); /* Прозрачность 65% */
+  cursor: pointer;
+}
+
+/* Стили для сообщения о прикреплённом файле */
+.fileAttachment {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 15px;
+  max-width: 80%;
+  word-break: break-word;
+  background-color: rgba(255, 255, 255, 0.7); /* Прозрачность 70% */
+  font-size: 0.9rem;
+}
+
+.fileAttachmentLocal {
+  background: rgba(220, 248, 198, 0.75); /* Прозрачность 75% */
+}
+
+.fileAttachmentRemote {
+  background: rgba(236, 236, 236, 0.75); /* Прозрачность 75% */
+}
+
+.fileAttachment svg,
+.fileAttachment img {
+  vertical-align: middle;
+  margin-right: 5px;
 }
 
 /* Панель настроек */
@@ -358,7 +392,7 @@
   justify-content: center;
   color: #fff;
   z-index: 10;
-  background-color: rgba(0,0,0,0.7);
+  background-color: rgba(0, 0, 0, 0.7);
   text-align: center;
   padding: 20px;
   animation: fadeIn 0.5s ease;
@@ -419,7 +453,7 @@
   top: -30px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.7);
+  background: rgba(0, 0, 0, 0.7);
   color: white;
   padding: 4px 8px;
   border-radius: 4px;
@@ -452,25 +486,30 @@
     height: auto;
     min-height: 100vh;
   }
+
   .videoWrapper {
     width: 100% !important;
     height: 50vh !important;
     min-height: 300px;
     aspect-ratio: 16/9;
   }
+
   /* Специфичные стили для разного количества участников */
   .videoWrapper:only-child {
     height: 100vh !important;
   }
+
   .videoWrapper:nth-child(1):nth-last-child(2),
   .videoWrapper:nth-child(2):nth-last-child(1) {
     height: 50vh !important;
   }
+
   .videoWrapper:nth-child(1):nth-last-child(3),
   .videoWrapper:nth-child(2):nth-last-child(2),
   .videoWrapper:nth-child(3):nth-last-child(1) {
     height: calc(100vh / 3) !important;
   }
+
   .chatContainer {
     position: fixed;
     right: 10px;
@@ -478,6 +517,7 @@
     width: calc(100% - 20px);
     height: 40%;
   }
+
   .controls {
     position: fixed;
     bottom: 10px;
@@ -488,6 +528,7 @@
     width: 95%;
     gap: 5px;
   }
+
   .controlButton {
     width: 40px;
     height: 40px;

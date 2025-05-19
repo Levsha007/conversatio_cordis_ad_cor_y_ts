@@ -1,5 +1,5 @@
 // Импорт необходимых зависимостей
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
@@ -24,6 +24,22 @@ interface ChatMessage {
   timestamp: string;
   sender: string;
 }
+
+/**
+ * Интерфейс для сообщений о прикреплённых файлах
+ */
+interface FileAttachment {
+  id: string;
+  fileName: string;
+  isLocal: boolean;
+  timestamp: string;
+  sender: string;
+}
+
+/**
+ * Тип для сообщений в чате — может быть текстом или файлом
+ */
+type ChatItem = ChatMessage | FileAttachment;
 
 /**
  * Кастомный хук для определения мобильного устройства
@@ -105,26 +121,31 @@ const Room: React.FC = () => {
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
   const { search } = useLocation();
+
   // Используем хук для синхронизации вкладок
   useTabSync(roomID || '');
+
   // Определение типа устройства
   const isMobile = useIsMobile();
+
   // Использование кастомного хука WebRTC
-  const { 
-    clients, 
+  const {
+    clients,
     provideMediaRef,
-    mediaError, 
-    isMediaReady, 
+    mediaError,
+    isMediaReady,
     webRTCStatus,
     mediaState,
     toggleMedia,
     switchMediaDevice,
     availableDevices,
     addChatMessage,
+    addFileAttachment,
     getChatMessages,
     peerMediaElements,
     reconnect
   } = useWebRTC(roomID || '');
+
   // Состояния компонента
   const videoLayout = calculateLayout(clients.length, isMobile);
   const [retryCount, setRetryCount] = useState(0);
@@ -133,10 +154,12 @@ const Room: React.FC = () => {
   const [showChat, setShowChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(getChatMessages());
+  const [messages, setMessages] = useState<ChatItem[]>(getChatMessages());
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null); // Состояние для прикрепленного файла
+
+  // Реф для файла
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Получение метки отправителя сообщения
@@ -180,16 +203,6 @@ const Room: React.FC = () => {
   };
 
   /**
-   * Обработка выбора файла
-   */
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAttachedFile(file);
-    }
-  };
-
-  /**
    * Отправка сообщения в чат
    */
   const handleSendMessage = () => {
@@ -206,12 +219,36 @@ const Room: React.FC = () => {
       addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
-      socket.emit(ACTIONS.CHAT_MESSAGE, { 
-        roomID, 
+      socket.emit(ACTIONS.CHAT_MESSAGE, {
+        roomID,
         message: trimmedMessage,
         id: messageId,
         timestamp: new Date().toISOString()
       });
+    }
+  };
+
+  /**
+   * Обработчик выбора файла
+   */
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && roomID) {
+      const fileId = `${socket.id}-${Date.now()}`;
+      const newFileAttachment: FileAttachment = {
+        id: fileId,
+        fileName: file.name,
+        isLocal: true,
+        timestamp: new Date().toLocaleTimeString(),
+        sender: socket.id || 'unknown'
+      };
+      addFileAttachment(newFileAttachment);
+      setMessages(prev => [...prev, newFileAttachment]);
+    }
+
+    // Сброс значения инпута, чтобы можно было выбрать тот же файл снова
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -232,21 +269,49 @@ const Room: React.FC = () => {
     }) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, {
-          id: msg.id,
-          text: msg.message,
-          isLocal: msg.sender === socket.id,
-          timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-          sender: msg.sender
-        }];
+        return [
+          ...prev,
+          {
+            id: msg.id,
+            text: msg.message,
+            isLocal: msg.sender === socket.id,
+            timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+            sender: msg.sender
+          }
+        ];
       });
     };
+
+    const fileAttachedHandler = (data: {
+      id: string;
+      fileName: string;
+      sender: string;
+      timestamp: string;
+    }) => {
+      setMessages(prev => {
+        if (prev.some(m => m.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            fileName: data.fileName,
+            isLocal: data.sender === socket.id,
+            timestamp: new Date(data.timestamp).toLocaleTimeString(),
+            sender: data.sender
+          }
+        ];
+      });
+    };
+
     socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
+    socket.on(ACTIONS.FILE_ATTACHED, fileAttachedHandler);
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
+
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
+      socket.off(ACTIONS.FILE_ATTACHED, fileAttachedHandler);
     };
   }, [roomID]);
 
@@ -277,12 +342,8 @@ const Room: React.FC = () => {
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
             <>
-              <h2 className={styles.errorTitle}>
-                WebRTC не поддерживается в вашем браузере
-              </h2>
-              <p className={styles.errorDescription}>
-                {webRTCStatus.errors.join(', ')}
-              </p>
+              <h2 className={styles.errorTitle}>WebRTC не поддерживается в вашем браузере</h2>
+              <p className={styles.errorDescription}>{webRTCStatus.errors.join(', ')}</p>
             </>
           ) : mediaError ? (
             <>
@@ -294,10 +355,7 @@ const Room: React.FC = () => {
                   ? 'Не удалось найти медиаустройства'
                   : mediaError.message}
               </p>
-              <button 
-                onClick={handleRetry}
-                className={styles.retryButton}
-              >
+              <button onClick={handleRetry} className={styles.retryButton}>
                 Попробовать снова
               </button>
             </>
@@ -309,13 +367,10 @@ const Room: React.FC = () => {
           )}
         </div>
       ) : null}
+
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
-        <div 
-          key={`${clientID}-${retryCount}`}
-          className={styles.videoWrapper}
-          style={videoLayout[index]}
-        >
+        <div key={`${clientID}-${retryCount}`} className={styles.videoWrapper} style={videoLayout[index]}>
           <video
             ref={instance => provideMediaRef(clientID, instance)}
             autoPlay
@@ -334,6 +389,7 @@ const Room: React.FC = () => {
           </div>
         </div>
       ))}
+
       {/* Панель управления */}
       <div className={styles.controls}>
         {/* Кнопка микрофона */}
@@ -347,6 +403,7 @@ const Room: React.FC = () => {
         >
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
+
         {/* Кнопка камеры */}
         <button
           onClick={() => toggleMedia('video')}
@@ -358,6 +415,7 @@ const Room: React.FC = () => {
         >
           {mediaState.video ? '📹' : '📷'}
         </button>
+
         {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
@@ -369,6 +427,7 @@ const Room: React.FC = () => {
         >
           💬
         </button>
+
         {/* Кнопка настроек */}
         <button
           onClick={() => setShowSettings(!showSettings)}
@@ -380,6 +439,7 @@ const Room: React.FC = () => {
         >
           ⚙️
         </button>
+
         {/* Кнопка копирования ссылки */}
         <button
           onClick={handleCopyLink}
@@ -390,6 +450,7 @@ const Room: React.FC = () => {
           <span>🔗</span>
           {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
         </button>
+
         {/* Кнопка выхода */}
         <button
           onClick={handleLeaveRoom}
@@ -400,12 +461,13 @@ const Room: React.FC = () => {
           🚪
         </button>
       </div>
+
       {/* Чат */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
             <span>Чат комнаты</span>
-            <button 
+            <button
               onClick={() => setShowChat(false)}
               className={styles.chatCloseButton}
               aria-label="Закрыть чат"
@@ -413,55 +475,81 @@ const Room: React.FC = () => {
               ×
             </button>
           </div>
-          <div 
-            ref={chatContainerRef}
-            className={styles.chatMessages}
-            aria-live="polite"
-          >
+
+          <div ref={chatContainerRef} className={styles.chatMessages} aria-live="polite">
             {messages.length === 0 ? (
-              <div className={styles.noMessages}>
-                Нет сообщений
-              </div>
+              <div className={styles.noMessages}>Нет сообщений</div>
             ) : (
-              messages.map(msg => (
-                <div 
-                  key={msg.id}
-                  className={`${styles.message} ${
-                    msg.isLocal ? styles.messageLocal : ''
-                  }`}
-                >
-                  <div className={styles.messageSender}>
-                    {getSenderLabel(msg.sender)}
-                  </div>
-                  <div className={`${styles.messageBubble} ${
-                    msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
-                  }`}>
-                    {msg.text}
-                  </div>
-                  <div className={styles.messageTime}>
-                    {msg.timestamp} {msg.isLocal ? '✓' : ''}
-                  </div>
-                </div>
-              ))
+              messages.map((msg, idx) => {
+                // Это обычное сообщение
+                if ('text' in msg) {
+                  return (
+                    <div
+                      key={msg.id || `msg-${idx}`}
+                      className={`${styles.message} ${msg.isLocal ? styles.messageLocal : ''}`}
+                    >
+                      <div className={styles.messageSender}>{getSenderLabel(msg.sender)}</div>
+                      <div
+                        className={`${styles.messageBubble} ${
+                          msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                      <div className={styles.messageTime}>
+                        {msg.timestamp} {msg.isLocal ? '✓' : ''}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Это сообщение о файле
+                if ('fileName' in msg) {
+                  return (
+                    <div
+                      key={msg.id || `file-${idx}`}
+                      className={`${styles.message} ${msg.isLocal ? styles.messageLocal : ''}`}
+                    >
+                      <div className={styles.messageSender}>{getSenderLabel(msg.sender)}</div>
+                      <div
+                        className={`${styles.fileAttachment} ${
+                          msg.isLocal ? styles.fileAttachmentLocal : styles.fileAttachmentRemote
+                        }`}
+                      >
+                        📄 {msg.fileName}
+                      </div>
+                      <div className={styles.messageTime}>
+                        {msg.timestamp} {msg.isLocal ? '✓' : ''}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return null;
+              })
             )}
           </div>
+
           {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
             <input
               type="text"
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onChange={e => setMessageInput(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
               aria-label="Введите сообщение"
             />
+
             <input
               type="file"
+              ref={fileInputRef}
               onChange={handleFileChange}
               className={styles.fileInput}
               aria-label="Прикрепить файл"
             />
+
             <button
               onClick={handleSendMessage}
               disabled={!messageInput.trim()}
@@ -475,12 +563,13 @@ const Room: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>
             <h3 style={{ margin: 0 }}>Настройки</h3>
-            <button 
+            <button
               onClick={() => setShowSettings(false)}
               className={styles.settingsCloseButton}
               aria-label="Закрыть настройки"
@@ -488,6 +577,7 @@ const Room: React.FC = () => {
               ×
             </button>
           </div>
+
           {/* Выбор микрофона */}
           <div className={styles.settingsSection}>
             <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
@@ -495,7 +585,7 @@ const Room: React.FC = () => {
             </label>
             <select
               id="audioDeviceSelect"
-              onChange={(e) => switchMediaDevice('audio', e.target.value)}
+              onChange={e => switchMediaDevice('audio', e.target.value)}
               className={styles.settingsSelect}
               aria-label="Выберите микрофон"
             >
@@ -506,6 +596,7 @@ const Room: React.FC = () => {
               ))}
             </select>
           </div>
+
           {/* Выбор камеры */}
           <div className={styles.settingsSection}>
             <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
@@ -513,7 +604,7 @@ const Room: React.FC = () => {
             </label>
             <select
               id="videoDeviceSelect"
-              onChange={(e) => switchMediaDevice('video', e.target.value)}
+              onChange={e => switchMediaDevice('video', e.target.value)}
               className={styles.settingsSelect}
               aria-label="Выберите камеру"
             >
