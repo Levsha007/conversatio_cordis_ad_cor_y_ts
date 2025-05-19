@@ -452,30 +452,25 @@
     height: auto;
     min-height: 100vh;
   }
-  
   .videoWrapper {
     width: 100% !important;
     height: 50vh !important;
     min-height: 300px;
     aspect-ratio: 16/9;
   }
-  
   /* Специфичные стили для разного количества участников */
   .videoWrapper:only-child {
     height: 100vh !important;
   }
-  
   .videoWrapper:nth-child(1):nth-last-child(2),
   .videoWrapper:nth-child(2):nth-last-child(1) {
     height: 50vh !important;
   }
-  
   .videoWrapper:nth-child(1):nth-last-child(3),
   .videoWrapper:nth-child(2):nth-last-child(2),
   .videoWrapper:nth-child(3):nth-last-child(1) {
     height: calc(100vh / 3) !important;
   }
-  
   .chatContainer {
     position: fixed;
     right: 10px;
@@ -483,7 +478,6 @@
     width: calc(100% - 20px);
     height: 40%;
   }
-  
   .controls {
     position: fixed;
     bottom: 10px;
@@ -494,7 +488,6 @@
     width: 95%;
     gap: 5px;
   }
-  
   .controlButton {
     width: 40px;
     height: 40px;
