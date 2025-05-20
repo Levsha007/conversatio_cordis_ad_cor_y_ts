@@ -131,7 +131,7 @@
   position: fixed;
   right: 20px;
   bottom: 80px;
-  width: 300px;
+  width: 330px; /* Расширяем чат на 10% */
   height: 400px;
   background-color: rgba(255, 255, 255, 0.65); /* Прозрачность фона 65% */
   border-radius: 10px;
@@ -219,11 +219,6 @@
   background: rgba(236, 236, 236, 0.75); /* Прозрачность 75% */
 }
 
-/* Текст сообщения с прозрачностью 60% */
-.messageText {
-  opacity: 0.6 !important;
-}
-
 /* Время сообщения */
 .messageTime {
   font-size: 0.7em;
@@ -232,12 +227,13 @@
   opacity: 0.8; /* Прозрачность 80% */
 }
 
-/* Поле ввода сообщения и отправка файла */
+/* Контейнер ввода сообщения */
 .chatInputContainer {
   padding: 10px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   display: flex;
   gap: 8px;
+  align-items: center;
   background-color: transparent;
 }
 
@@ -280,38 +276,24 @@
   cursor: not-allowed;
 }
 
-/* Форма прикрепления файла */
-.fileInput {
-  padding: 10px;
-  border-radius: 20px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background-color: rgba(255, 255, 255, 0.65); /* Прозрачность 65% */
+/* Кнопка скрепки 📎 для прикрепления файла */
+.attachmentButton {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
   cursor: pointer;
+  color: #777;
+  transition: color 0.2s ease;
 }
 
-/* Стили для сообщения о прикреплённом файле */
-.fileAttachment {
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 15px;
-  max-width: 80%;
-  word-break: break-word;
-  background-color: rgba(255, 255, 255, 0.7); /* Прозрачность 70% */
-  font-size: 0.9rem;
+/* Эффект при наведении на скрепку */
+.attachmentButton:hover {
+  color: #333;
 }
 
-.fileAttachmentLocal {
-  background: rgba(220, 248, 198, 0.75); /* Прозрачность 75% */
-}
-
-.fileAttachmentRemote {
-  background: rgba(236, 236, 236, 0.75); /* Прозрачность 75% */
-}
-
-.fileAttachment svg,
-.fileAttachment img {
-  vertical-align: middle;
-  margin-right: 5px;
+/* Скрытое поле ввода файла */
+.fileInput {
+  display: none;
 }
 
 /* Панель настроек */
@@ -478,7 +460,7 @@
   color: #2ecc71;
 }
 
-/* Мобильная адаптация */
+/* Стили для мобильных устройств */
 @media (max-width: 767px) {
   .roomContainer {
     flex-direction: column;
@@ -494,7 +476,6 @@
     aspect-ratio: 16/9;
   }
 
-  /* Специфичные стили для разного количества участников */
   .videoWrapper:only-child {
     height: 100vh !important;
   }
