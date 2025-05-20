@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+// Импорт необходименных хуков и зависимостей
+import { useEffect, useRef, useCallback, useState } from 'react';
 import useStateWithCallback from './useStateWithCallback';
 import socket from '../socket';
 import { ACTIONS } from '../socket/actions';
@@ -13,8 +14,8 @@ interface WebRTCStatus {
 }
 
 interface MediaState {
-  audio: boolean; // Состояние аудио (вкл/выкл)
-  video: boolean; // Состояние видео (вкл/выкл)
+  audio: boolean;       // Состояние аудио (вкл/выкл)
+  video: boolean;       // Состояние видео (вкл/выкл)
 }
 
 interface AvailableDevices {
@@ -22,7 +23,6 @@ interface AvailableDevices {
   video: MediaDeviceInfo[]; // Доступные видео устройства
 }
 
-// Сообщение чата
 interface ChatMessage {
   id: string;
   text: string;
@@ -30,17 +30,6 @@ interface ChatMessage {
   timestamp: string;
   sender: string;
 }
-
-// Прикрепление файла
-interface FileAttachment {
-  id: string;
-  fileName: string;
-  isLocal: boolean;
-  timestamp: string;
-  sender: string;
-}
-
-type ChatItem = ChatMessage | FileAttachment;
 
 interface UseWebRTCReturn {
   clients: string[];
@@ -53,8 +42,7 @@ interface UseWebRTCReturn {
   switchMediaDevice: (type: 'audio' | 'video', deviceId?: string) => Promise<boolean>;
   availableDevices: AvailableDevices;
   addChatMessage: (message: ChatMessage) => void;
-  addFileAttachment: (file: FileAttachment) => void;
-  getChatMessages: () => ChatItem[];
+  getChatMessages: () => ChatMessage[];
   peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
   reconnect: () => Promise<void>;
 }
@@ -90,7 +78,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     [LOCAL_VIDEO]: null
   });
 
-  const chatMessages = useRef<ChatItem[]>([]); // Храним и сообщения, и файлы
+  const chatMessages = useRef<ChatMessage[]>([]);
 
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
@@ -299,11 +287,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     chatMessages.current = [...chatMessages.current, message];
   }, []);
 
-  const addFileAttachment = useCallback((file: FileAttachment) => {
-    chatMessages.current = [...chatMessages.current, file];
-  }, []);
-
-  const getChatMessages = useCallback(() => {
+  const getChatMessages = useCallback((): ChatMessage[] => {
     return chatMessages.current;
   }, []);
 
@@ -408,25 +392,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       sender: string;
       timestamp: string;
     }) => {
-      addChatMessage({
-        ...msg,
-        isLocal: msg.sender === socket.id,
+      const parsedMessage: ChatMessage = {
+        id: msg.id,
         text: msg.message,
+        isLocal: msg.sender === socket.id,
         timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-      });
-    };
-
-    const handleFileAttached = (data: {
-      id: string;
-      fileName: string;
-      sender: string;
-      timestamp: string;
-    }) => {
-      addFileAttachment({
-        ...data,
-        isLocal: data.sender === socket.id,
-        timestamp: new Date(data.timestamp).toLocaleTimeString()
-      });
+        sender: msg.sender
+      };
+      addChatMessage(parsedMessage);
     };
 
     const handlers = {
@@ -434,8 +407,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
       [ACTIONS.ICE_CANDIDATE]: handleIceCandidate,
       [ACTIONS.REMOVE_PEER]: handleRemovePeer,
-      [ACTIONS.CHAT_MESSAGE]: handleChatMessage,
-      [ACTIONS.FILE_ATTACHED]: handleFileAttached
+      [ACTIONS.CHAT_MESSAGE]: handleChatMessage
     };
 
     Object.entries(handlers).forEach(([action, handler]) => {
@@ -451,7 +423,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         socket.off(action as any, handler);
       });
     };
-  }, [setupPeerConnection, updateClients, addChatMessage, addFileAttachment]);
+  }, [setupPeerConnection, updateClients, addChatMessage]);
 
   return {
     clients,
@@ -464,7 +436,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     switchMediaDevice,
     availableDevices,
     addChatMessage,
-    addFileAttachment,
     getChatMessages,
     peerMediaElements,
     reconnect
