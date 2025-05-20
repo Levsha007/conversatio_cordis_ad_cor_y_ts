@@ -4,21 +4,16 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
 
+// Импортируем константы действий из actions.ts
 import { ACTIONS } from './socket/actions';
 
-// Интерфейс для текстовых сообщений чата
+/**
+ * Интерфейс для сообщений чата
+ */
 interface ChatMessage {
   id: string;          // Уникальный ID сообщения
   sender: string;      // ID отправителя
   message: string;     // Текст сообщения
-  timestamp: string;   // Временная метка сообщения
-}
-
-// Интерфейс для сообщений о прикреплённых файлах
-interface FileAttachment {
-  id: string;          // Уникальный ID события
-  sender: string;      // ID отправителя
-  fileName: string;    // Имя файла
   timestamp: string;   // Временная метка
 }
 
@@ -30,21 +25,21 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor-y-ts.vercel.app",
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app ",
       "http://localhost:3000"
     ],
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ["websocket", "polling"],  // Используемые транспортные протоколы
+  transports: ["websocket", "polling"],  // Поддерживаемые транспортные протоколы
   pingTimeout: 60000,    // Таймаут соединения (мс)
   pingInterval: 25000    // Интервал пинга (мс)
 });
 
 const PORT = process.env.PORT || 3001;  // Порт сервера
 
-// Хранилище чатов по комнатам (включая имена файлов)
-const roomChats = new Map<string, (ChatMessage | FileAttachment)[]>();
+// Хранилище чатов по комнатам
+const roomChats = new Map<string, ChatMessage[]>();
 
 /**
  * Функция очистки истории чата пустой комнаты
@@ -67,6 +62,7 @@ io.on('connection', (socket: Socket) => {
 
   /**
    * Обработчик входа в комнату
+   * @param config - параметры входа
    */
   socket.on(ACTIONS.JOIN, (config: { room: string }) => {
     const { room: roomID } = config;
@@ -157,45 +153,11 @@ io.on('connection', (socket: Socket) => {
     const roomMessages = roomChats.get(roomID)!;
 
     if (roomMessages.length >= 100) {
-      roomMessages.shift();
+      roomMessages.shift(); // Ограничиваем историю до 100 сообщений
     }
 
     roomMessages.push(chatMessage);
-    io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, chatMessage);
-  });
-
-  /**
-   * Обработчик сообщений о прикреплённых файлах
-   */
-  socket.on(ACTIONS.FILE_ATTACHED, (data: {
-    roomID: string;
-    fileName: string;
-    id?: string;
-    timestamp?: string;
-  }) => {
-    const { roomID, fileName, id, timestamp } = data;
-
-    if (!validate(roomID)) return;
-
-    const fileAttachment: FileAttachment = {
-      id: id || `${socket.id}-${Date.now()}`,
-      sender: socket.id,
-      fileName,
-      timestamp: timestamp || new Date().toISOString()
-    };
-
-    if (!roomChats.has(roomID)) {
-      roomChats.set(roomID, []);
-    }
-
-    const roomMessages = roomChats.get(roomID)!;
-
-    if (roomMessages.length >= 100) {
-      roomMessages.shift();
-    }
-
-    roomMessages.push(fileAttachment);
-    io.to(roomID).emit(ACTIONS.FILE_ATTACHED, fileAttachment);
+    io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, chatMessage); // Рассылаем всем участникам
   });
 
   /**

@@ -1,4 +1,4 @@
-// Импорт необходимных зависимостей
+// Импорт необходимых зависимостей
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
@@ -351,8 +351,10 @@ const Room: React.FC = () => {
               clientID === LOCAL_VIDEO && !mediaState.video ? styles.videoLocalHidden : ''
             }`}
           />
+          {/* Метка пользователя */}
           <div className={styles.userLabel}>
             {clientID === LOCAL_VIDEO ? 'Вы' : `Участник ${index + 1}`}
+            {/* Индикаторы состояния медиа */}
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
             {!mediaState.video && clientID === LOCAL_VIDEO && <span>📷</span>}
           </div>

@@ -1,4 +1,4 @@
-// Импорт необходименных хуков и зависимостей
+// Импорт необходимых хуков и зависимостей
 import { useEffect, useRef, useCallback, useState } from 'react';
 import useStateWithCallback from './useStateWithCallback';
 import socket from '../socket';
@@ -14,8 +14,8 @@ interface WebRTCStatus {
 }
 
 interface MediaState {
-  audio: boolean;       // Состояние аудио (вкл/выкл)
-  video: boolean;       // Состояние видео (вкл/выкл)
+  audio: boolean; // Состояние аудио (вкл/выкл)
+  video: boolean; // Состояние видео (вкл/выкл)
 }
 
 interface AvailableDevices {
@@ -24,14 +24,14 @@ interface AvailableDevices {
 }
 
 interface ChatMessage {
-  id: string;
-  text: string;
-  isLocal: boolean;
-  timestamp: string;
-  sender: string;
+  id: string;         // Уникальный ID сообщения
+  text: string;       // Текст сообщения
+  isLocal: boolean;   // Отправлено ли текущим пользователем
+  timestamp: string;  // Временная метка
+  sender: string;     // ID отправителя
 }
 
-interface UseWebRTCReturn {
+type UseWebRTCReturn = {
   clients: string[];
   provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
   mediaError: Error | null;
@@ -45,9 +45,9 @@ interface UseWebRTCReturn {
   getChatMessages: () => ChatMessage[];
   peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
   reconnect: () => Promise<void>;
-}
+};
 
-// Функция проверки поддержки WebRTC в браузере
+// Проверка доступности WebRTC
 function checkWebRTCAvailability(): WebRTCStatus {
   const errors: string[] = [];
   if (!navigator.mediaDevices) errors.push('mediaDevices недоступен');
@@ -78,7 +78,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     [LOCAL_VIDEO]: null
   });
 
-  const chatMessages = useRef<ChatMessage[]>([]);
+  const chatMessages = useRef<ChatMessage[]>([]); // Храним все сообщения чата
 
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
@@ -93,7 +93,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }, cb);
   }, [updateClients]);
 
-  // Функция получения настроек медиапотока
+  // Получить параметры медиапотока
   const getMediaConstraints = useCallback((): MediaStreamConstraints => ({
     audio: true,
     video: {
@@ -103,7 +103,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }), []);
 
-  // Функция перечисления доступных устройств
+  // Перечисление доступных устройств
   const enumerateDevices = useCallback(async (): Promise<void> => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -116,7 +116,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, []);
 
-  // Функция запуска медиапотока
+  // Запуск медиапотока
   const startMediaStream = useCallback(async (): Promise<MediaStream | null> => {
     setMediaError(null);
     setIsMediaReady(false);
@@ -140,8 +140,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [getMediaConstraints, enumerateDevices]);
 
-  // Функция переподключения
-  const reconnect = useCallback(async () => {
+  // Переподключение
+  const reconnect = useCallback(async (): Promise<void> => {
     try {
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
@@ -167,7 +167,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [roomID, startMediaStream, addNewClient, updateClients]);
 
-  // Функция переключения состояния медиа (вкл/выкл)
+  // Переключение состояния медиа (вкл/выкл)
   const toggleMedia = useCallback((type: 'audio' | 'video') => {
     setMediaState(prev => {
       const newState = { ...prev, [type]: !prev[type] };
@@ -182,7 +182,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     });
   }, []);
 
-  // Функция переключения медиаустройства
+  // Переключение медиаустройства
   const switchMediaDevice = useCallback(
     async (type: 'audio' | 'video', deviceId?: string): Promise<boolean> => {
       try {
@@ -237,6 +237,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const setupPeerConnection = useCallback(
     async (peerID: string, createOffer: boolean) => {
       if (peerConnections.current[peerID]) return;
+
       const pc = new RTCPeerConnection({ iceServers: iceServers.current });
       peerConnections.current[peerID] = pc;
 
@@ -259,7 +260,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         if (!remoteStream) return;
         addNewClient(peerID, () => {
           const element = peerMediaElements.current[peerID];
-          if (element) element.srcObject = remoteStream;
+          if (element) {
+            element.muted = true; // 🔥 Обязательно мутировано!
+            element.playsInline = true;
+            element.autoplay = true;
+            element.srcObject = remoteStream;
+          }
         });
       };
 
@@ -282,29 +288,30 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     [addNewClient]
   );
 
-  // Функции для работы с чатом
+  // Добавление сообщения в чат
   const addChatMessage = useCallback((message: ChatMessage) => {
     chatMessages.current = [...chatMessages.current, message];
   }, []);
 
-  const getChatMessages = useCallback((): ChatMessage[] => {
+  // Получение всех сообщений
+  const getChatMessages = useCallback(() => {
     return chatMessages.current;
   }, []);
 
-  // Привязка рефа к видео элементам
+  // Привязка ref к видео элементам
   const provideMediaRef = useCallback(
     (id: string, node: HTMLVideoElement | null) => {
       if (node) {
         node.autoplay = true;
         node.playsInline = true;
-        node.muted = id === LOCAL_VIDEO;
+        node.muted = id === LOCAL_VIDEO; // Только локальное видео без звука
         peerMediaElements.current[id] = node;
       }
     },
     []
   );
 
-  // Инициализация
+  // Инициализация WebRTC
   useEffect(() => {
     let isMounted = true;
     let stream: MediaStream | null = null;
@@ -314,6 +321,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         stream = await startMediaStream();
         if (!isMounted || !stream) return;
         localMediaStream.current = stream;
+
         addNewClient(LOCAL_VIDEO, () => {
           const localVideo = peerMediaElements.current[LOCAL_VIDEO];
           if (localVideo) {
@@ -321,6 +329,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             localVideo.volume = 0;
           }
         });
+
         if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
       } catch (err) {
         console.error('Ошибка инициализации:', err);
@@ -341,7 +350,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     };
   }, [roomID, startMediaStream, addNewClient]);
 
-  // Обработчики событий
+  // Подписка на события Socket.IO
   useEffect(() => {
     const handleAddPeer = ({ peerID, createOffer }: { peerID: string; createOffer: boolean }) => {
       setupPeerConnection(peerID, createOffer);
@@ -392,14 +401,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       sender: string;
       timestamp: string;
     }) => {
-      const parsedMessage: ChatMessage = {
-        id: msg.id,
-        text: msg.message,
+      addChatMessage({
+        ...msg,
         isLocal: msg.sender === socket.id,
+        text: msg.message,
         timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-        sender: msg.sender
-      };
-      addChatMessage(parsedMessage);
+      });
     };
 
     const handlers = {
