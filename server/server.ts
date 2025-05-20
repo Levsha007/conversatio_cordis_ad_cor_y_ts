@@ -8,7 +8,7 @@ import { ACTIONS } from './socket/actions';
 
 // Интерфейс для текстовых сообщений чата
 interface ChatMessage {
-  id: string;          // Уникальный идентификатор сообщения
+  id: string;          // Уникальный ID сообщения
   sender: string;      // ID отправителя
   message: string;     // Текст сообщения
   timestamp: string;   // Временная метка сообщения
@@ -16,10 +16,10 @@ interface ChatMessage {
 
 // Интерфейс для сообщений о прикреплённых файлах
 interface FileAttachment {
-  id: string;
-  sender: string;
-  fileName: string;
-  timestamp: string;
+  id: string;          // Уникальный ID события
+  sender: string;      // ID отправителя
+  fileName: string;    // Имя файла
+  timestamp: string;   // Временная метка
 }
 
 // Создаем Express приложение и HTTP сервер
@@ -43,7 +43,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;  // Порт сервера
 
-// Хранилище чатов по комнатам
+// Хранилище чатов по комнатам (включая имена файлов)
 const roomChats = new Map<string, (ChatMessage | FileAttachment)[]>();
 
 /**
@@ -67,7 +67,6 @@ io.on('connection', (socket: Socket) => {
 
   /**
    * Обработчик входа в комнату
-   * @param config - параметры входа
    */
   socket.on(ACTIONS.JOIN, (config: { room: string }) => {
     const { room: roomID } = config;

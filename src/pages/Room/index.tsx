@@ -1,5 +1,5 @@
 // Импорт необходимых зависимостей
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
@@ -15,7 +15,7 @@ interface LayoutItem {
 }
 
 /**
- * Интерфейс для сообщений чата
+ * Интерфейс для текстовых сообщений чата
  */
 interface ChatMessage {
   id: string;
@@ -36,9 +36,6 @@ interface FileAttachment {
   sender: string;
 }
 
-/**
- * Тип для сообщений в чате — может быть текстом или файлом
- */
 type ChatItem = ChatMessage | FileAttachment;
 
 /**
@@ -99,11 +96,13 @@ function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutIte
       height: `${100 / Math.min(clientsCount, 4)}%`
     });
   }
-  const pairs = Array.from({ length: clientsCount })
-    .reduce<Array<Array<undefined>>>((acc, _, index, arr) => {
+  const pairs = Array.from({ length: clientsCount }).reduce<Array<Array<undefined>>>(
+    (acc, _, index, arr) => {
       if (index % 2 === 0) acc.push(arr.slice(index, index + 2) as undefined[]);
       return acc;
-    }, []);
+    },
+    []
+  );
   return pairs.map((row, index, arr) => {
     const height = `${100 / pairs.length}%`;
     if (index === arr.length - 1 && row.length === 1) {
@@ -158,7 +157,7 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Реф для файла
+  // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -203,7 +202,7 @@ const Room: React.FC = () => {
   };
 
   /**
-   * Отправка сообщения в чат
+   * Отправка текстового сообщения в чат
    */
   const handleSendMessage = () => {
     const trimmedMessage = messageInput.trim();
@@ -246,7 +245,7 @@ const Room: React.FC = () => {
       setMessages(prev => [...prev, newFileAttachment]);
     }
 
-    // Сброс значения инпута, чтобы можно было выбрать тот же файл снова
+    // Сбрасываем значение инпута, чтобы можно было выбрать тот же файл снова
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -259,7 +258,7 @@ const Room: React.FC = () => {
     }
   }, [messages]);
 
-  // Подписка на сообщения чата и запрос истории
+  // Подписка на события чата и запрос истории
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
@@ -305,6 +304,7 @@ const Room: React.FC = () => {
 
     socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     socket.on(ACTIONS.FILE_ATTACHED, fileAttachedHandler);
+
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
@@ -334,10 +334,10 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
-  // Рендер компонента
+  // Рендер основного интерфейса
   return (
     <div className={styles.roomContainer}>
-      {/* Оверлей с ошибками подключения */}
+      {/* Оверлей с ошибками */}
       {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
@@ -372,7 +372,7 @@ const Room: React.FC = () => {
       {clients.map((clientID, index) => (
         <div key={`${clientID}-${retryCount}`} className={styles.videoWrapper} style={videoLayout[index]}>
           <video
-            ref={instance => provideMediaRef(clientID, instance)}
+            ref={(instance) => provideMediaRef(clientID, instance)}
             autoPlay
             playsInline
             muted={clientID === LOCAL_VIDEO}
@@ -475,13 +475,12 @@ const Room: React.FC = () => {
               ×
             </button>
           </div>
-
           <div ref={chatContainerRef} className={styles.chatMessages} aria-live="polite">
             {messages.length === 0 ? (
               <div className={styles.noMessages}>Нет сообщений</div>
             ) : (
               messages.map((msg, idx) => {
-                // Это обычное сообщение
+                // Это обычное текстовое сообщение
                 if ('text' in msg) {
                   return (
                     <div
@@ -503,7 +502,7 @@ const Room: React.FC = () => {
                   );
                 }
 
-                // Это сообщение о файле
+                // Это сообщение о прикреплённом файле
                 if ('fileName' in msg) {
                   return (
                     <div
@@ -535,8 +534,8 @@ const Room: React.FC = () => {
             <input
               type="text"
               value={messageInput}
-              onChange={e => setMessageInput(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
               aria-label="Введите сообщение"
@@ -585,7 +584,7 @@ const Room: React.FC = () => {
             </label>
             <select
               id="audioDeviceSelect"
-              onChange={e => switchMediaDevice('audio', e.target.value)}
+              onChange={(e) => switchMediaDevice('audio', e.target.value)}
               className={styles.settingsSelect}
               aria-label="Выберите микрофон"
             >
@@ -604,7 +603,7 @@ const Room: React.FC = () => {
             </label>
             <select
               id="videoDeviceSelect"
-              onChange={e => switchMediaDevice('video', e.target.value)}
+              onChange={(e) => switchMediaDevice('video', e.target.value)}
               className={styles.settingsSelect}
               aria-label="Выберите камеру"
             >

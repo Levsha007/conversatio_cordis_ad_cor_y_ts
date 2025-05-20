@@ -1,5 +1,4 @@
-// Импорт необходимых хуков и зависимостей
-import { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import useStateWithCallback from './useStateWithCallback';
 import socket from '../socket';
 import { ACTIONS } from '../socket/actions';
@@ -10,7 +9,7 @@ export const LOCAL_VIDEO = 'LOCAL_VIDEO';
 // Интерфейсы для типизации данных
 interface WebRTCStatus {
   isSupported: boolean; // Поддерживается ли WebRTC
-  errors: string[]; // Список ошибок, если не поддерживается
+  errors: string[];     // Список ошибок, если не поддерживается
 }
 
 interface MediaState {
@@ -23,15 +22,17 @@ interface AvailableDevices {
   video: MediaDeviceInfo[]; // Доступные видео устройства
 }
 
+// Сообщение чата
 interface ChatMessage {
-  id: string; // Уникальный ID сообщения
-  text: string; // Текст сообщения
-  isLocal: boolean; // Отправлено ли текущим пользователем
-  timestamp: string; // Время отправки
-  sender: string; // ID отправителя
+  id: string;
+  text: string;
+  isLocal: boolean;
+  timestamp: string;
+  sender: string;
 }
 
-interface FileAttachmentMessage {
+// Прикрепление файла
+interface FileAttachment {
   id: string;
   fileName: string;
   isLocal: boolean;
@@ -39,23 +40,23 @@ interface FileAttachmentMessage {
   sender: string;
 }
 
-type ChatItem = ChatMessage | FileAttachmentMessage;
+type ChatItem = ChatMessage | FileAttachment;
 
 interface UseWebRTCReturn {
-  clients: string[]; // Список ID подключенных клиентов
+  clients: string[];
   provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
-  mediaError: Error | null; // Ошибка медиа
-  isMediaReady: boolean; // Готовность медиа
-  webRTCStatus: WebRTCStatus; // Статус WebRTC
-  mediaState: MediaState; // Текущее состояние медиа
-  toggleMedia: (type: 'audio' | 'video') => void; // Переключение медиа
+  mediaError: Error | null;
+  isMediaReady: boolean;
+  webRTCStatus: WebRTCStatus;
+  mediaState: MediaState;
+  toggleMedia: (type: 'audio' | 'video') => void;
   switchMediaDevice: (type: 'audio' | 'video', deviceId?: string) => Promise<boolean>;
-  availableDevices: AvailableDevices; // Доступные устройства
-  addChatMessage: (message: ChatMessage) => void; // Добавление текстового сообщения
-  addFileAttachment: (file: FileAttachmentMessage) => void; // Добавление сообщения о файле
-  getChatMessages: () => ChatItem[]; // Получение всех сообщений
+  availableDevices: AvailableDevices;
+  addChatMessage: (message: ChatMessage) => void;
+  addFileAttachment: (file: FileAttachment) => void;
+  getChatMessages: () => ChatItem[];
   peerMediaElements: React.MutableRefObject<Record<string, HTMLVideoElement | null>>;
-  reconnect: () => Promise<void>; // Переподключение
+  reconnect: () => Promise<void>;
 }
 
 // Функция проверки поддержки WebRTC в браузере
@@ -89,12 +90,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     [LOCAL_VIDEO]: null
   });
 
+  const chatMessages = useRef<ChatItem[]>([]); // Храним и сообщения, и файлы
+
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' }
   ]);
-
-  const chatMessages = useRef<ChatItem[]>([]); // Поддерживаем и сообщения, и файлы
 
   // Функция добавления нового клиента
   const addNewClient = useCallback((newClient: string, cb?: () => void) => {
@@ -244,7 +245,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     [enumerateDevices, mediaState]
   );
 
-  // Функция установки соединения с пиром
+  // Установка соединения с пиром
   const setupPeerConnection = useCallback(
     async (peerID: string, createOffer: boolean) => {
       if (peerConnections.current[peerID]) return;
@@ -298,7 +299,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     chatMessages.current = [...chatMessages.current, message];
   }, []);
 
-  const addFileAttachment = useCallback((file: FileAttachmentMessage) => {
+  const addFileAttachment = useCallback((file: FileAttachment) => {
     chatMessages.current = [...chatMessages.current, file];
   }, []);
 
@@ -306,7 +307,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     return chatMessages.current;
   }, []);
 
-  // Функция привязки видео элементов
+  // Привязка рефа к видео элементам
   const provideMediaRef = useCallback(
     (id: string, node: HTMLVideoElement | null) => {
       if (node) {
@@ -319,7 +320,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     []
   );
 
-  // Эффект инициализации
+  // Инициализация
   useEffect(() => {
     let isMounted = true;
     let stream: MediaStream | null = null;
@@ -329,7 +330,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         stream = await startMediaStream();
         if (!isMounted || !stream) return;
         localMediaStream.current = stream;
-
         addNewClient(LOCAL_VIDEO, () => {
           const localVideo = peerMediaElements.current[LOCAL_VIDEO];
           if (localVideo) {
@@ -337,7 +337,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             localVideo.volume = 0;
           }
         });
-
         if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
       } catch (err) {
         console.error('Ошибка инициализации:', err);
@@ -358,7 +357,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     };
   }, [roomID, startMediaStream, addNewClient]);
 
-  // Эффект для обработки socket-событий
+  // Обработчики событий
   useEffect(() => {
     const handleAddPeer = ({ peerID, createOffer }: { peerID: string; createOffer: boolean }) => {
       setupPeerConnection(peerID, createOffer);
@@ -413,7 +412,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         ...msg,
         isLocal: msg.sender === socket.id,
         text: msg.message,
-        timestamp: new Date(msg.timestamp).toLocaleTimeString()
+        timestamp: new Date(msg.timestamp).toLocaleTimeString(),
       });
     };
 
@@ -452,14 +451,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         socket.off(action as any, handler);
       });
     };
-  }, [
-    setupPeerConnection,
-    updateClients,
-    addChatMessage,
-    addFileAttachment
-  ]);
+  }, [setupPeerConnection, updateClients, addChatMessage, addFileAttachment]);
 
-  // Возвращаем объект с функциями и состояниями
   return {
     clients,
     provideMediaRef,
