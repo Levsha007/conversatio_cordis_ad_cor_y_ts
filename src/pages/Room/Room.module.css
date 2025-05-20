@@ -131,7 +131,7 @@
   position: fixed;
   right: 20px;
   bottom: 80px;
-  width: 330px; /* Расширяем чат на 10% */
+  width: 330px; /* Расширение на 10% */
   height: 400px;
   background-color: rgba(255, 255, 255, 0.65); /* Прозрачность фона 65% */
   border-radius: 10px;
@@ -237,6 +237,21 @@
   background-color: transparent;
 }
 
+/* Кнопка скрепки 📎 */
+.attachmentButton {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #777;
+  transition: color 0.2s ease;
+}
+
+/* Эффект при наведении на скрепку */
+.attachmentButton:hover {
+  color: #333;
+}
+
 /* Поле ввода текста */
 .chatInput {
   flex: 1;
@@ -262,6 +277,8 @@
   border: none;
   border-radius: 20px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
@@ -274,21 +291,6 @@
 .chatSendButtonDisabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* Кнопка скрепки 📎 для прикрепления файла */
-.attachmentButton {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: #777;
-  transition: color 0.2s ease;
-}
-
-/* Эффект при наведении на скрепку */
-.attachmentButton:hover {
-  color: #333;
 }
 
 /* Скрытое поле ввода файла */
