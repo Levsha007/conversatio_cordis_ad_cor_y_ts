@@ -131,7 +131,7 @@
   position: fixed;
   right: 20px;
   bottom: 80px;
-  width: 330px; /* Расширение на 10% */
+  width: 330px; /* Расширение на 10% по сравнению с 300px */
   height: 400px;
   background-color: rgba(255, 255, 255, 0.65); /* Прозрачность фона 65% */
   border-radius: 10px;
@@ -261,6 +261,8 @@
   outline: none;
   font-size: 0.9rem;
   background-color: rgba(255, 255, 255, 0.65); /* Прозрачность 65% */
+  height: 34px; /* Единая высота с кнопкой */
+  box-sizing: border-box;
 }
 
 /* Стиль поля ввода при фокусе */
@@ -277,9 +279,17 @@
   border: none;
   border-radius: 20px;
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
   transition: all 0.2s ease;
+  height: 34px; /* Такая же высота как у .chatInput */
+  min-width: 70px;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
 }
 
 /* Эффект при наведении на кнопку отправки */
