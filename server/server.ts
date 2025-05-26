@@ -3,7 +3,6 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
-
 // Импортируем константы действий из actions.ts
 import { ACTIONS } from './socket/actions';
 
@@ -25,7 +24,7 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor-y-ts.vercel.app ",
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app  ",
       "http://localhost:3000"
     ],
     methods: ["GET", "POST"],
@@ -66,19 +65,16 @@ io.on('connection', (socket: Socket) => {
    */
   socket.on(ACTIONS.JOIN, (config: { room: string }) => {
     const { room: roomID } = config;
-
     if (!validate(roomID)) {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
 
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
-
     clients.forEach(clientID => {
       io.to(clientID).emit(ACTIONS.ADD_PEER, {
         peerID: socket.id,
         createOffer: false
       });
-
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
         createOffer: true,
@@ -108,12 +104,10 @@ io.on('connection', (socket: Socket) => {
 
     realRooms.forEach(roomID => {
       const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
-
       clients.forEach(clientID => {
         io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
           peerID: socket.id,
         });
-
         socket.emit(ACTIONS.REMOVE_PEER, {
           peerID: clientID,
         });
@@ -121,7 +115,6 @@ io.on('connection', (socket: Socket) => {
 
       socket.leave(roomID);
       console.log(`User ${socket.id} left room ${roomID}`);
-
       cleanupRoom(roomID);
     });
   }
@@ -215,11 +208,9 @@ io.on('connection', (socket: Socket) => {
     const hasRealRooms = Array.from(socket.rooms).some(roomID =>
       roomID !== socket.id && validate(roomID) && version(roomID) === 4
     );
-
     if (hasRealRooms) {
       leaveRoom();
     }
-
     console.log(`User disconnecting: ${socket.id}`);
   });
 

@@ -77,9 +77,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const peerMediaElements = useRef<Record<string, HTMLVideoElement | null>>({
     [LOCAL_VIDEO]: null
   });
-
   const chatMessages = useRef<ChatMessage[]>([]); // Храним все сообщения чата
-
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' }
@@ -123,12 +121,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     try {
       const { isSupported, errors } = checkWebRTCAvailability();
       if (!isSupported) throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
-
       if (localMediaStream.current) {
         localMediaStream.current.getTracks().forEach(track => track.stop());
         localMediaStream.current = null;
       }
-
       const stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       await enumerateDevices();
       setIsMediaReady(true);
@@ -191,23 +187,18 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           track.stop();
           localMediaStream.current?.removeTrack(track);
         });
-
         const constraints: MediaStreamConstraints = {
           [type]: deviceId ? { deviceId: { exact: deviceId } } : true
         };
-
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTracks = stream.getTracks();
-
         if (!localMediaStream.current) {
           localMediaStream.current = new MediaStream();
         }
-
         newTracks.forEach(track => {
           localMediaStream.current?.addTrack(track);
           track.enabled = mediaState[type];
         });
-
         Object.values(peerConnections.current).forEach(pc => {
           const senders = pc.getSenders();
           senders.forEach(sender => {
@@ -217,12 +208,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             }
           });
         });
-
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
         if (localVideo) {
           localVideo.srcObject = new MediaStream(localMediaStream.current?.getTracks() || []);
         }
-
         await enumerateDevices();
         return true;
       } catch (err) {
@@ -237,16 +226,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const setupPeerConnection = useCallback(
     async (peerID: string, createOffer: boolean) => {
       if (peerConnections.current[peerID]) return;
-
       const pc = new RTCPeerConnection({ iceServers: iceServers.current });
       peerConnections.current[peerID] = pc;
-
       if (localMediaStream.current) {
         localMediaStream.current.getTracks().forEach(track => {
           pc.addTrack(track, localMediaStream.current!);
         });
       }
-
       pc.onicecandidate = event => {
         if (event.candidate) {
           socket.emit(ACTIONS.RELAY_ICE, {
@@ -255,7 +241,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           });
         }
       };
-
       pc.ontrack = ({ streams: [remoteStream] }) => {
         if (!remoteStream) return;
         addNewClient(peerID, () => {
@@ -268,7 +253,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           }
         });
       };
-
       if (createOffer) {
         try {
           const offer = await pc.createOffer({
@@ -315,13 +299,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   useEffect(() => {
     let isMounted = true;
     let stream: MediaStream | null = null;
-
     const init = async () => {
       try {
         stream = await startMediaStream();
         if (!isMounted || !stream) return;
         localMediaStream.current = stream;
-
         addNewClient(LOCAL_VIDEO, () => {
           const localVideo = peerMediaElements.current[LOCAL_VIDEO];
           if (localVideo) {
@@ -329,16 +311,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             localVideo.volume = 0;
           }
         });
-
         if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
       } catch (err) {
         console.error('Ошибка инициализации:', err);
         setMediaError(err as Error);
       }
     };
-
     init();
-
     return () => {
       isMounted = false;
       Object.values(peerConnections.current).forEach(pc => pc.close());
@@ -355,7 +334,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     const handleAddPeer = ({ peerID, createOffer }: { peerID: string; createOffer: boolean }) => {
       setupPeerConnection(peerID, createOffer);
     };
-
     const handleSessionDescription = async ({
       peerID,
       sessionDescription
@@ -379,12 +357,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         console.error('Ошибка setRemoteDescription:', err);
       }
     };
-
     const handleIceCandidate = ({ peerID, iceCandidate }: { peerID: string; iceCandidate: RTCIceCandidateInit }) => {
       const pc = peerConnections.current[peerID];
       if (pc) pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
     };
-
     const handleRemovePeer = ({ peerID }: { peerID: string }) => {
       const pc = peerConnections.current[peerID];
       if (pc) {
@@ -394,7 +370,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         updateClients(list => list.filter(c => c !== peerID));
       }
     };
-
     const handleChatMessage = (msg: {
       id: string;
       message: string;
@@ -408,7 +383,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         timestamp: new Date(msg.timestamp).toLocaleTimeString(),
       });
     };
-
     const handlers = {
       [ACTIONS.ADD_PEER]: handleAddPeer,
       [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
@@ -416,15 +390,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       [ACTIONS.REMOVE_PEER]: handleRemovePeer,
       [ACTIONS.CHAT_MESSAGE]: handleChatMessage
     };
-
     Object.entries(handlers).forEach(([action, handler]) => {
       socket.on(action as any, handler);
     });
-
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
-
     return () => {
       Object.entries(handlers).forEach(([action, handler]) => {
         socket.off(action as any, handler);
