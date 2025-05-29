@@ -3,7 +3,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
-// Импортируем константы действий из actions.ts
+
+// Импорт констант действий из actions.ts
 import { ACTIONS } from './socket/actions';
 
 /**
@@ -24,7 +25,7 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor-y-ts.vercel.app  ",
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app", 
       "http://localhost:3000"
     ],
     methods: ["GET", "POST"],
@@ -69,7 +70,10 @@ io.on('connection', (socket: Socket) => {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
 
+    // Получаем список текущих участников комнаты
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
+
+    // Отправляем всем участникам информацию о новом пользователе
     clients.forEach(clientID => {
       io.to(clientID).emit(ACTIONS.ADD_PEER, {
         peerID: socket.id,
@@ -81,13 +85,16 @@ io.on('connection', (socket: Socket) => {
       });
     });
 
+    // Присоединяемся к комнате
     socket.join(roomID);
     console.log(`User ${socket.id} joined room ${roomID}`);
 
+    // Если история чата ещё не существует, создаем её
     if (!roomChats.has(roomID)) {
       roomChats.set(roomID, []);
     }
 
+    // Отправляем историю чата текущему пользователю
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
   });
 

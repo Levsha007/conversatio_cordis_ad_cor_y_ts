@@ -226,13 +226,21 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const setupPeerConnection = useCallback(
     async (peerID: string, createOffer: boolean) => {
       if (peerConnections.current[peerID]) return;
+
+      // Проверяем, что локальный поток есть
+      if (!localMediaStream.current) {
+        console.error('Local media stream is not available');
+        return;
+      }
+
       const pc = new RTCPeerConnection({ iceServers: iceServers.current });
       peerConnections.current[peerID] = pc;
-      if (localMediaStream.current) {
-        localMediaStream.current.getTracks().forEach(track => {
-          pc.addTrack(track, localMediaStream.current!);
-        });
-      }
+
+      // Добавляем треки из локального потока в новое соединение
+      localMediaStream.current.getTracks().forEach(track => {
+        pc.addTrack(track, localMediaStream.current!);
+      });
+
       pc.onicecandidate = event => {
         if (event.candidate) {
           socket.emit(ACTIONS.RELAY_ICE, {
@@ -241,8 +249,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           });
         }
       };
+
       pc.ontrack = ({ streams: [remoteStream] }) => {
         if (!remoteStream) return;
+
+        // Добавляем нового участника
         addNewClient(peerID, () => {
           const element = peerMediaElements.current[peerID];
           if (element) {
@@ -253,6 +264,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           }
         });
       };
+
       if (createOffer) {
         try {
           const offer = await pc.createOffer({
@@ -318,6 +330,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       }
     };
     init();
+
     return () => {
       isMounted = false;
       Object.values(peerConnections.current).forEach(pc => pc.close());
@@ -334,6 +347,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     const handleAddPeer = ({ peerID, createOffer }: { peerID: string; createOffer: boolean }) => {
       setupPeerConnection(peerID, createOffer);
     };
+
     const handleSessionDescription = async ({
       peerID,
       sessionDescription
@@ -357,10 +371,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         console.error('Ошибка setRemoteDescription:', err);
       }
     };
+
     const handleIceCandidate = ({ peerID, iceCandidate }: { peerID: string; iceCandidate: RTCIceCandidateInit }) => {
       const pc = peerConnections.current[peerID];
       if (pc) pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
     };
+
     const handleRemovePeer = ({ peerID }: { peerID: string }) => {
       const pc = peerConnections.current[peerID];
       if (pc) {
@@ -370,6 +386,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         updateClients(list => list.filter(c => c !== peerID));
       }
     };
+
     const handleChatMessage = (msg: {
       id: string;
       message: string;
@@ -383,6 +400,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         timestamp: new Date(msg.timestamp).toLocaleTimeString(),
       });
     };
+
     const handlers = {
       [ACTIONS.ADD_PEER]: handleAddPeer,
       [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
@@ -390,12 +408,15 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       [ACTIONS.REMOVE_PEER]: handleRemovePeer,
       [ACTIONS.CHAT_MESSAGE]: handleChatMessage
     };
+
     Object.entries(handlers).forEach(([action, handler]) => {
       socket.on(action as any, handler);
     });
+
     if (roomID) {
       socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
     }
+
     return () => {
       Object.entries(handlers).forEach(([action, handler]) => {
         socket.off(action as any, handler);
