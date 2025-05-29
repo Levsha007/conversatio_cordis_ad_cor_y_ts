@@ -151,8 +151,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       localMediaStream.current = stream;
       addNewClient(LOCAL_VIDEO, () => {
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-        if (localVideo) {
-          localVideo.srcObject = stream;
+        if (localMediaStream.current && localVideo) {
+          localVideo.srcObject = localMediaStream.current;
           localVideo.volume = 0;
         }
       });
@@ -253,7 +253,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       pc.ontrack = ({ streams: [remoteStream] }) => {
         if (!remoteStream) return;
 
-        // Добавляем нового участника
         addNewClient(peerID, () => {
           const element = peerMediaElements.current[peerID];
           if (element) {

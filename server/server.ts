@@ -70,7 +70,6 @@ io.on('connection', (socket: Socket) => {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
 
-    // Получаем список текущих участников комнаты
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
 
     // Отправляем всем участникам информацию о новом пользователе

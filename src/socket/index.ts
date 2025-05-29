@@ -1,7 +1,5 @@
 // Импорт библиотеки Socket.IO клиента и типов
 import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
-
-// Импорт констант действий
 import { ACTIONS } from './actions';
 
 /**
@@ -31,7 +29,7 @@ type CustomSocketOptions = Partial<ManagerOptions & SocketOptions> & {
   "force new connection"?: boolean;
 };
 
-// Конфигурация подключения
+// Конфигурация подключения к серверу
 const options: CustomSocketOptions = {
   "force new connection": true,
   reconnectionAttempts: Infinity, // Бесконечные попытки переподключения
@@ -85,7 +83,7 @@ interface ClientToServerEvents {
  * Создание экземпляра сокета с полной типизацией
  */
 const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
-  "https://conversatio-cordis-ad-cor-y-ts.onrender.com", 
+  "https://conversatio-cordis-ad-cor-y-ts.onrender.com",  
   {
     ...options,
     transports: ["websocket", "polling"] // Используем оба транспорта

@@ -1,3 +1,4 @@
+// Импорт необходимых хуков и зависимостей
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 // Тип callback-функции, которая будет вызвана после обновления состояния
@@ -18,7 +19,7 @@ type SetStateCallback<T> = (
 const useStateWithCallback = <T>(initialState: T): [T, SetStateCallback<T>] => {
     // Стандартный useState для хранения состояния
     const [state, setState] = useState<T>(initialState);
-    
+
     // Ref для хранения callback-функции между рендерами
     const cbRef = useRef<Callback<T> | null>(null);
 
@@ -30,7 +31,7 @@ const useStateWithCallback = <T>(initialState: T): [T, SetStateCallback<T>] => {
     const updateState: SetStateCallback<T> = useCallback((newState, cb) => {
         // Сохраняем callback в ref
         cbRef.current = cb || null;
-        
+
         // Обновляем состояние, обрабатывая как значение, так и функцию
         setState(prev => 
             typeof newState === 'function' 
