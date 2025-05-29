@@ -151,8 +151,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       localMediaStream.current = stream;
       addNewClient(LOCAL_VIDEO, () => {
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-        if (localMediaStream.current && localVideo) {
-          localVideo.srcObject = localMediaStream.current;
+        if (localVideo) {
+          localVideo.srcObject = stream;
           localVideo.volume = 0;
         }
       });
