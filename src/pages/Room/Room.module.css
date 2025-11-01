@@ -52,6 +52,13 @@
 .screenShareIndicator {
   color: #4CAF50;
   font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
 /* Окно выбора устройств */
@@ -707,4 +714,26 @@
     height: 40px;
     font-size: 0.9em;
   }
+}
+
+/* Стили для пустого видео */
+.videoWrapper:has(.video[srcObject=""]) .userLabel,
+.videoWrapper:has(.video:not([srcObject])) .userLabel {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.videoWrapper:has(.video[srcObject=""]) .video,
+.videoWrapper:has(.video:not([srcObject])) .video {
+  background: linear-gradient(45deg, #1a1a1a, #2d2d2d);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.videoWrapper:has(.video[srcObject=""]) .video::before,
+.videoWrapper:has(.video:not([srcObject])) .video::before {
+  content: "Нет видео";
+  color: #888;
+  font-size: 16px;
+  font-family: Arial, sans-serif;
 }

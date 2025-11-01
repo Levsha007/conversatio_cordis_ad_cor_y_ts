@@ -208,7 +208,7 @@ const Room: React.FC = () => {
   // Определение типа устройства
   const isMobile = useIsMobile();
 
-  // Использование кастомного хука WebRTC - ПЕРЕМЕЩЕНО ВВЕРХ
+  // Использование кастомного хука WebRTC
   const {
     clients,
     provideMediaRef,
@@ -228,7 +228,7 @@ const Room: React.FC = () => {
     initializeMedia
   } = useWebRTC(roomID || '');
 
-  // Состояния компонента - ПЕРЕМЕЩЕНО ПОСЛЕ useWebRTC
+  // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
   const videoLayout = calculateLayout(clients.length, isMobile);
@@ -238,7 +238,7 @@ const Room: React.FC = () => {
   const [showChat, setShowChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]); // Исправлено: убрана зависимость от getChatMessages()
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -317,7 +317,15 @@ const Room: React.FC = () => {
       await startScreenShare();
     } catch (err) {
       console.error('Ошибка демонстрации экрана:', err);
-      alert('Не удалось начать демонстрацию экрана');
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          alert('Разрешение на демонстрацию экрана было отклонено');
+        } else {
+          alert('Не удалось начать демонстрацию экрана: ' + err.message);
+        }
+      } else {
+        alert('Не удалось начать демонстрацию экрана');
+      }
     }
   };
 
@@ -470,7 +478,9 @@ const Room: React.FC = () => {
       )}
 
       {/* Оверлей с ошибками */}
-      {(!isMediaReady && devicesInitialized) || (clients.length === 0 && devicesInitialized) || !webRTCStatus.isSupported ? (
+      {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) || 
+        (clients.length === 0 && devicesInitialized) || 
+        !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
             <>
