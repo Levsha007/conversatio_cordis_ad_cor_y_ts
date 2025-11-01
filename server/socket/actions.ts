@@ -30,7 +30,11 @@ export const ACTIONS = {
   // Запрос истории чата
   REQUEST_CHAT_HISTORY: 'request-chat-history',
   // Прикрепление файла в чате
-  FILE_ATTACHED: 'file-attached'
+  FILE_ATTACHED: 'file-attached',
+  // Пользователь присоединился
+  USER_JOINED: 'user-joined',
+  // Пользователь вышел
+  USER_LEFT: 'user-left'
 } as const;
 
 // Экспорт по умолчанию для обратной совместимости
@@ -99,6 +103,7 @@ interface ChatMessage {
   sender: string; // ID отправителя
   message: string; // Текст сообщения
   timestamp: string; // Временная метка
+  userName?: string; // Имя пользователя
 }
 
 // Сообщение о прикреплённом файле
@@ -111,13 +116,15 @@ interface FileAttachment {
 
 // События от сервера к клиенту
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { peerID: string; createOffer: boolean }) => void;
+  [ACTIONS.ADD_PEER]: (params: { peerID: string; createOffer: boolean; userName?: string }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string; iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string; sessionDescription: RTCSessionDescriptionInit }) => void;
   [ACTIONS.CHAT_MESSAGE]: (params: ChatMessage) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: ChatMessage[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  [ACTIONS.USER_JOINED]: (params: { userId: string; userName: string }) => void;
+  [ACTIONS.USER_LEFT]: (params: { userId: string }) => void;
 }
 
 // События от клиента к серверу

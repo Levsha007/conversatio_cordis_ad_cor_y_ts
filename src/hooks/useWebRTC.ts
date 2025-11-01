@@ -178,7 +178,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     } catch (err) {
       console.error('Ошибка инициализации медиа:', err);
       setMediaError(err as Error);
-      // Даже при ошибке добавляем локальное видео и присоединяемся к комнате
+      // Даже при ошибке добавляем локальное видео
       addNewClient(LOCAL_VIDEO);
       if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
     }
@@ -260,7 +260,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     } catch (err) {
       console.error('Ошибка демонстрации экрана:', err);
       setMediaError(err as Error);
-      throw err;
+      throw err; // Пробрасываем ошибку дальше
     }
   }, []);
 
@@ -505,7 +505,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   useEffect(() => {
     const handleAddPeer = ({ peerID, createOffer }: { 
       peerID: string; 
-      createOffer: boolean 
+      createOffer: boolean;
+      userName?: string;
     }) => {
       setupPeerConnection(peerID, createOffer);
     };
@@ -562,6 +563,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       message: string;
       sender: string;
       timestamp: string;
+      userName?: string;
     }) => {
       addChatMessage({
         id: msg.id,
