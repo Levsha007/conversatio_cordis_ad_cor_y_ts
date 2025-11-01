@@ -26,6 +26,14 @@ interface ChatMessage {
 }
 
 /**
+ * Интерфейс для настроек устройств
+ */
+interface DeviceSettings {
+  audio: boolean;
+  video: boolean;
+}
+
+/**
  * Кастомный хук для определения мобильного устройства
  * @returns {boolean} Флаг, является ли устройство мобильным
  */
@@ -78,6 +86,86 @@ const useTabSync = (roomId: string) => {
 };
 
 /**
+ * Компонент выбора устройств перед входом в комнату
+ */
+const DeviceSelection: React.FC<{
+  onJoin: (settings: DeviceSettings) => void;
+  onCancel: () => void;
+}> = ({ onJoin, onCancel }) => {
+  const [settings, setSettings] = useState<DeviceSettings>({
+    audio: false,
+    video: false
+  });
+
+  const handleToggle = (device: keyof DeviceSettings) => {
+    setSettings(prev => ({
+      ...prev,
+      [device]: !prev[device]
+    }));
+  };
+
+  const handleJoin = () => {
+    onJoin(settings);
+  };
+
+  return (
+    <div className={styles.deviceSelectionOverlay}>
+      <div className={styles.deviceSelectionModal}>
+        <h2>Настройка устройств</h2>
+        <p>Выберите устройства для подключения к комнате:</p>
+        
+        <div className={styles.deviceOptions}>
+          <label className={styles.deviceOption}>
+            <input
+              type="checkbox"
+              checked={settings.audio}
+              onChange={() => handleToggle('audio')}
+            />
+            <span className={styles.checkbox}></span>
+            <span className={styles.deviceLabel}>
+              <span className={styles.deviceIcon}>🎤</span>
+              Микрофон
+            </span>
+          </label>
+
+          <label className={styles.deviceOption}>
+            <input
+              type="checkbox"
+              checked={settings.video}
+              onChange={() => handleToggle('video')}
+            />
+            <span className={styles.checkbox}></span>
+            <span className={styles.deviceLabel}>
+              <span className={styles.deviceIcon}>📹</span>
+              Камера
+            </span>
+          </label>
+        </div>
+
+        <div className={styles.deviceSelectionButtons}>
+          <button
+            onClick={onCancel}
+            className={styles.cancelButton}
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleJoin}
+            className={styles.joinButton}
+          >
+            Войти в комнату
+          </button>
+        </div>
+
+        <div className={styles.deviceSelectionHint}>
+          <p>💡 Вы можете изменить настройки устройств в любой момент во время сессии</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * Функция расчета расположения видео элементов
  */
 function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
@@ -120,7 +208,7 @@ const Room: React.FC = () => {
   // Определение типа устройства
   const isMobile = useIsMobile();
 
-  // Использование кастомного хука WebRTC
+  // Использование кастомного хука WebRTC - ПЕРЕМЕЩЕНО ВВЕРХ
   const {
     clients,
     provideMediaRef,
@@ -134,10 +222,15 @@ const Room: React.FC = () => {
     addChatMessage,
     getChatMessages,
     peerMediaElements,
-    reconnect
+    reconnect,
+    startScreenShare,
+    stopScreenShare,
+    initializeMedia
   } = useWebRTC(roomID || '');
 
-  // Состояния компонента
+  // Состояния компонента - ПЕРЕМЕЩЕНО ПОСЛЕ useWebRTC
+  const [showDeviceSelection, setShowDeviceSelection] = useState(true);
+  const [devicesInitialized, setDevicesInitialized] = useState(false);
   const videoLayout = calculateLayout(clients.length, isMobile);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
@@ -145,12 +238,35 @@ const Room: React.FC = () => {
   const [showChat, setShowChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(getChatMessages());
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // Исправлено: убрана зависимость от getChatMessages()
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Инициализация сообщений при монтировании
+  useEffect(() => {
+    if (getChatMessages) {
+      setMessages(getChatMessages());
+    }
+  }, [getChatMessages]);
+
+  /**
+   * Обработчик выбора устройств
+   */
+  const handleDeviceSelection = async (settings: DeviceSettings) => {
+    setShowDeviceSelection(false);
+    await initializeMedia(settings);
+    setDevicesInitialized(true);
+  };
+
+  /**
+   * Отмена выбора устройств
+   */
+  const handleCancelDeviceSelection = () => {
+    navigate('/');
+  };
 
   /**
    * Получение метки отправителя сообщения
@@ -194,6 +310,25 @@ const Room: React.FC = () => {
   };
 
   /**
+   * Запуск демонстрации экрана
+   */
+  const handleStartScreenShare = async () => {
+    try {
+      await startScreenShare();
+    } catch (err) {
+      console.error('Ошибка демонстрации экрана:', err);
+      alert('Не удалось начать демонстрацию экрана');
+    }
+  };
+
+  /**
+   * Остановка демонстрации экрана
+   */
+  const handleStopScreenShare = () => {
+    stopScreenShare();
+  };
+
+  /**
    * Отправка сообщения в чат
    */
   const handleSendMessage = () => {
@@ -207,7 +342,11 @@ const Room: React.FC = () => {
         timestamp: new Date().toLocaleTimeString(),
         sender: socket.id || 'unknown'
       };
-      addChatMessage(newMessage);
+      
+      // Используем addChatMessage из хука и обновляем локальное состояние
+      if (addChatMessage) {
+        addChatMessage(newMessage);
+      }
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
       socket.emit(ACTIONS.CHAT_MESSAGE, {
@@ -234,7 +373,11 @@ const Room: React.FC = () => {
         timestamp: new Date().toLocaleTimeString(),
         sender: socket.id || 'unknown'
       };
-      addChatMessage(newMessage);
+      
+      // Используем addChatMessage из хука и обновляем локальное состояние
+      if (addChatMessage) {
+        addChatMessage(newMessage);
+      }
       setMessages(prev => [...prev, newMessage]);
 
       // Отправляем сообщение как обычное текстовое сообщение
@@ -269,16 +412,20 @@ const Room: React.FC = () => {
     }) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: msg.id,
-            text: msg.message,
-            isLocal: msg.sender === socket.id,
-            timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-            sender: msg.sender
-          }
-        ];
+        const newMessage = {
+          id: msg.id,
+          text: msg.message,
+          isLocal: msg.sender === socket.id,
+          timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+          sender: msg.sender
+        };
+        
+        // Используем addChatMessage из хука
+        if (addChatMessage) {
+          addChatMessage(newMessage);
+        }
+        
+        return [...prev, newMessage];
       });
     };
 
@@ -290,7 +437,7 @@ const Room: React.FC = () => {
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     };
-  }, [roomID]);
+  }, [roomID, addChatMessage]);
 
   // Обработка и отображение ошибок WebRTC и медиаустройств
   useEffect(() => {
@@ -314,8 +461,16 @@ const Room: React.FC = () => {
   // Рендер основного интерфейса
   return (
     <div className={styles.roomContainer}>
+      {/* Окно выбора устройств */}
+      {showDeviceSelection && (
+        <DeviceSelection
+          onJoin={handleDeviceSelection}
+          onCancel={handleCancelDeviceSelection}
+        />
+      )}
+
       {/* Оверлей с ошибками */}
-      {!isMediaReady || clients.length === 0 || !webRTCStatus.isSupported ? (
+      {(!isMediaReady && devicesInitialized) || (clients.length === 0 && devicesInitialized) || !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
             <>
@@ -354,7 +509,7 @@ const Room: React.FC = () => {
             playsInline
             muted={clientID === LOCAL_VIDEO}
             className={`${styles.video} ${
-              clientID === LOCAL_VIDEO && !mediaState.video ? styles.videoLocalHidden : ''
+              clientID === LOCAL_VIDEO && !mediaState.video && !mediaState.screen ? styles.videoLocalHidden : ''
             }`}
           />
           {/* Метка пользователя */}
@@ -362,7 +517,8 @@ const Room: React.FC = () => {
             {clientID === LOCAL_VIDEO ? 'Вы' : `Участник ${index + 1}`}
             {/* Индикаторы состояния медиа */}
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
-            {!mediaState.video && clientID === LOCAL_VIDEO && <span>📷</span>}
+            {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
+            {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
           </div>
         </div>
       ))}
@@ -370,28 +526,53 @@ const Room: React.FC = () => {
       {/* Панель управления */}
       <div className={styles.controls}>
         {/* Кнопка микрофона */}
-        <button
-          onClick={() => toggleMedia('audio')}
-          className={`${styles.controlButton} ${
-            mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
-          }`}
-          title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-          aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-        >
-          {mediaState.audio ? '🎤' : '🔇'}
-        </button>
+        {mediaState.audio !== undefined && (
+          <button
+            onClick={() => toggleMedia('audio')}
+            className={`${styles.controlButton} ${
+              mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
+            }`}
+            title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+            aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+          >
+            {mediaState.audio ? '🎤' : '🔇'}
+          </button>
+        )}
 
         {/* Кнопка камеры */}
-        <button
-          onClick={() => toggleMedia('video')}
-          className={`${styles.controlButton} ${
-            mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
-          }`}
-          title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-          aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-        >
-          {mediaState.video ? '📹' : '📷'}
-        </button>
+        {mediaState.video !== undefined && (
+          <button
+            onClick={() => toggleMedia('video')}
+            className={`${styles.controlButton} ${
+              mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
+            }`}
+            title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+            aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+          >
+            {mediaState.video ? '📹' : '📷'}
+          </button>
+        )}
+
+        {/* Кнопка демонстрации экрана */}
+        {!mediaState.screen ? (
+          <button
+            onClick={handleStartScreenShare}
+            className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
+            title="Начать демонстрацию экрана"
+            aria-label="Начать демонстрацию экрана"
+          >
+            🖥️
+          </button>
+        ) : (
+          <button
+            onClick={handleStopScreenShare}
+            className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}
+            title="Остановить демонстрацию экрана"
+            aria-label="Остановить демонстрацию экрана"
+          >
+            ⏹️
+          </button>
+        )}
 
         {/* Кнопка чата */}
         <button
@@ -538,42 +719,46 @@ const Room: React.FC = () => {
           </div>
 
           {/* Выбор микрофона */}
-          <div className={styles.settingsSection}>
-            <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
-              Микрофон:
-            </label>
-            <select
-              id="audioDeviceSelect"
-              onChange={(e) => switchMediaDevice('audio', e.target.value)}
-              className={styles.settingsSelect}
-              aria-label="Выберите микрофон"
-            >
-              {availableDevices.audio.map((device, index) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Микрофон ${index + 1}`}
-                </option>
-              ))}
-            </select>
-          </div>
+          {availableDevices.audio.length > 0 && (
+            <div className={styles.settingsSection}>
+              <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
+                Микрофон:
+              </label>
+              <select
+                id="audioDeviceSelect"
+                onChange={(e) => switchMediaDevice('audio', e.target.value)}
+                className={styles.settingsSelect}
+                aria-label="Выберите микрофон"
+              >
+                {availableDevices.audio.map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Микрофон ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Выбор камеры */}
-          <div className={styles.settingsSection}>
-            <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
-              Камера:
-            </label>
-            <select
-              id="videoDeviceSelect"
-              onChange={(e) => switchMediaDevice('video', e.target.value)}
-              className={styles.settingsSelect}
-              aria-label="Выберите камеру"
-            >
-              {availableDevices.video.map((device, index) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Камера ${index + 1}`}
-                </option>
-              ))}
-            </select>
-          </div>
+          {availableDevices.video.length > 0 && (
+            <div className={styles.settingsSection}>
+              <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
+                Камера:
+              </label>
+              <select
+                id="videoDeviceSelect"
+                onChange={(e) => switchMediaDevice('video', e.target.value)}
+                className={styles.settingsSelect}
+                aria-label="Выберите камеру"
+              >
+                {availableDevices.video.map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Камера ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
     </div>
