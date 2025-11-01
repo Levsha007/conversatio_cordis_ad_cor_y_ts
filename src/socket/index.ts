@@ -10,7 +10,7 @@ interface ChatMessage {
   sender: string;      // ID отправителя
   message: string;     // Текст сообщения
   timestamp: string;   // Временная метка
-  userName?: string;   // Имя пользователя
+  userNumber?: number; // Номер пользователя
 }
 
 /**
@@ -43,7 +43,7 @@ const options: CustomSocketOptions = {
  * Типы событий, которые может получать клиент от сервера
  */
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { peerID: string, createOffer: boolean, userName?: string }) => void;
+  [ACTIONS.ADD_PEER]: (params: { peerID: string, createOffer: boolean, userNumber?: number }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
@@ -52,12 +52,10 @@ interface ServerToClientEvents {
     sender: string;
     message: string;
     timestamp: string;
-    userName?: string;
+    userNumber?: number;
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
-  [ACTIONS.USER_JOINED]: (params: { userId: string; userName: string }) => void;
-  [ACTIONS.USER_LEFT]: (params: { userId: string }) => void;
 }
 
 /**

@@ -241,7 +241,7 @@ const Room: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
 
   // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +252,24 @@ const Room: React.FC = () => {
       setMessages(getChatMessages());
     }
   }, [getChatMessages]);
+
+  /**
+   * Получение отображаемого имени пользователя
+   */
+  const getUserDisplayName = (userId: string): string => {
+    if (userId === LOCAL_VIDEO) return 'Вы';
+    const number = userNumbers[userId];
+    return number ? `Участник ${number}` : `Участник`;
+  };
+
+  /**
+   * Получение метки отправителя сообщения
+   */
+  const getSenderLabel = (senderId: string): string => {
+    if (senderId === socket.id) return 'Вы';
+    const number = userNumbers[senderId];
+    return number ? `Участник ${number}` : `Участник`;
+  };
 
   /**
    * Обработчик выбора устройств
@@ -267,22 +285,6 @@ const Room: React.FC = () => {
    */
   const handleCancelDeviceSelection = () => {
     navigate('/');
-  };
-
-  /**
-   * Получение имени пользователя
-   */
-  const getUserName = (userId: string): string => {
-    if (userId === LOCAL_VIDEO) return 'Вы';
-    return userNames[userId] || `Участник ${clients.indexOf(userId)}`;
-  };
-
-  /**
-   * Получение метки отправителя сообщения
-   */
-  const getSenderLabel = (senderId: string): string => {
-    if (senderId === socket.id) return 'Вы';
-    return userNames[senderId] || `Участник`;
   };
 
   /**
@@ -418,38 +420,47 @@ const Room: React.FC = () => {
     }
   }, [messages]);
 
-  // Подписка на события Socket.IO для обновления имен пользователей
+  // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
-    const handleUserJoined = ({ userId, userName }: { userId: string; userName: string }) => {
-      setUserNames(prev => ({ ...prev, [userId]: userName }));
-    };
-
-    const handleUserLeft = ({ userId }: { userId: string }) => {
-      setUserNames(prev => {
-        const newNames = { ...prev };
-        delete newNames[userId];
-        return newNames;
-      });
-    };
-
-    const handleAddPeer = ({ peerID, userName }: { 
+    const handleAddPeer = ({ peerID, userNumber }: { 
       peerID: string; 
       createOffer: boolean;
-      userName?: string;
+      userNumber?: number;
     }) => {
-      if (userName) {
-        setUserNames(prev => ({ ...prev, [peerID]: userName }));
+      if (userNumber) {
+        setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
       }
     };
 
-    socket.on(ACTIONS.USER_JOINED, handleUserJoined);
-    socket.on(ACTIONS.USER_LEFT, handleUserLeft);
+    const handleRemovePeer = ({ peerID }: { peerID: string }) => {
+      setUserNumbers(prev => {
+        const newNumbers = { ...prev };
+        delete newNumbers[peerID];
+        return newNumbers;
+      });
+    };
+
+    const handleChatMessage = (msg: {
+      id: string;
+      message: string;
+      sender: string;
+      timestamp: string;
+      userNumber?: number;
+    }) => {
+      // Обновляем номер пользователя если пришло
+      if (msg.userNumber && msg.sender !== socket.id) {
+        setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
+      }
+    };
+
     socket.on(ACTIONS.ADD_PEER, handleAddPeer);
+    socket.on(ACTIONS.REMOVE_PEER, handleRemovePeer);
+    socket.on(ACTIONS.CHAT_MESSAGE, handleChatMessage);
 
     return () => {
-      socket.off(ACTIONS.USER_JOINED, handleUserJoined);
-      socket.off(ACTIONS.USER_LEFT, handleUserLeft);
       socket.off(ACTIONS.ADD_PEER, handleAddPeer);
+      socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
+      socket.off(ACTIONS.CHAT_MESSAGE, handleChatMessage);
     };
   }, []);
 
@@ -460,14 +471,14 @@ const Room: React.FC = () => {
       message: string;
       sender: string;
       timestamp: string;
-      userName?: string;
+      userNumber?: number;
     }) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         
-        // Обновляем имя пользователя если пришло
-        if (msg.userName && msg.sender !== socket.id) {
-          setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
+        // Обновляем номер пользователя если пришло
+        if (msg.userNumber && msg.sender !== socket.id) {
+          setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
         }
         
         const newMessage = {
@@ -497,10 +508,10 @@ const Room: React.FC = () => {
       
       setMessages(formattedMessages);
       
-      // Обновляем имена пользователей из истории
+      // Обновляем номера пользователей из истории
       historyMessages.forEach(msg => {
-        if (msg.userName && msg.sender !== socket.id) {
-          setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName }));
+        if (msg.userNumber && msg.sender !== socket.id) {
+          setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber }));
         }
       });
     };
@@ -595,7 +606,7 @@ const Room: React.FC = () => {
           />
           {/* Метка пользователя */}
           <div className={styles.userLabel}>
-            {getUserName(clientID)}
+            {getUserDisplayName(clientID)}
             {/* Индикаторы состояния медиа */}
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
             {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}

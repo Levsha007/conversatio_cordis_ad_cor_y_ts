@@ -40,8 +40,8 @@ const PORT = process.env.PORT || 3001;  // Порт сервера
 
 // Хранилище чатов по комнатам
 const roomChats = new Map<string, ChatMessage[]>();
-// Хранилище информации о пользователях
-const userInfo = new Map<string, { name: string }>();
+// Хранилище информации о пользователях (просто счетчик для номеров)
+const roomUserCounters = new Map<string, number>();
 
 /**
  * Функция очистки истории чата пустой комнаты
@@ -51,17 +51,25 @@ function cleanupRoom(roomID: string): void {
   const room = io.sockets.adapter.rooms.get(roomID);
   if (!room || room.size === 0) {
     roomChats.delete(roomID);
+    roomUserCounters.delete(roomID);
     console.log(`Chat history cleared for room ${roomID}`);
   }
 }
 
 /**
- * Генерация читаемого имени пользователя
+ * Получение номера пользователя в комнате
  */
-function generateUserName(socketId: string): string {
-  const names = ['Алексей', 'Мария', 'Иван', 'Ольга', 'Дмитрий', 'Елена', 'Сергей', 'Анна'];
-  const randomName = names[Math.floor(Math.random() * names.length)];
-  return `${randomName}-${socketId.substring(0, 4)}`;
+function getUserNumber(roomID: string, socketId: string): number {
+  if (!roomUserCounters.has(roomID)) {
+    roomUserCounters.set(roomID, 1);
+  }
+  
+  const room = io.sockets.adapter.rooms.get(roomID);
+  if (!room) return 1;
+  
+  const clients = Array.from(room);
+  const userIndex = clients.indexOf(socketId);
+  return userIndex + 1; // +1 потому что индексы с 0, а номера с 1
 }
 
 /**
@@ -70,10 +78,6 @@ function generateUserName(socketId: string): string {
  */
 io.on('connection', (socket: Socket) => {
   console.log('New connection:', socket.id);
-  
-  // Генерируем имя для пользователя
-  const userName = generateUserName(socket.id);
-  userInfo.set(socket.id, { name: userName });
 
   /**
    * Обработчик входа в комнату
@@ -86,26 +90,29 @@ io.on('connection', (socket: Socket) => {
     }
 
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
+    const userNumber = getUserNumber(roomID, socket.id);
 
     // Отправляем всем участникам информацию о новом пользователе
     clients.forEach(clientID => {
+      const clientUserNumber = getUserNumber(roomID, clientID);
+      
       io.to(clientID).emit(ACTIONS.ADD_PEER, {
         peerID: socket.id,
         createOffer: false,
-        userName: userInfo.get(socket.id)?.name || `User-${socket.id.substring(0, 4)}`
+        userNumber: userNumber
       });
       
       // Отправляем новому пользователю информацию о существующих участниках
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
         createOffer: true,
-        userName: userInfo.get(clientID)?.name || `User-${clientID.substring(0, 4)}`
+        userNumber: clientUserNumber
       });
     });
 
     // Присоединяемся к комнате
     socket.join(roomID);
-    console.log(`User ${socket.id} (${userName}) joined room ${roomID}`);
+    console.log(`User ${socket.id} joined room ${roomID} as Participant ${userNumber}`);
 
     // Если история чата ещё не существует, создаем её
     if (!roomChats.has(roomID)) {
@@ -114,12 +121,6 @@ io.on('connection', (socket: Socket) => {
 
     // Отправляем историю чата текущему пользователю
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
-    
-    // Уведомляем всех о новом участнике
-    socket.to(roomID).emit(ACTIONS.USER_JOINED, {
-      userId: socket.id,
-      userName: userName
-    });
   });
 
   /**
@@ -146,12 +147,6 @@ io.on('connection', (socket: Socket) => {
 
       socket.leave(roomID);
       console.log(`User ${socket.id} left room ${roomID}`);
-      
-      // Уведомляем об уходе участника
-      socket.to(roomID).emit(ACTIONS.USER_LEFT, {
-        userId: socket.id
-      });
-      
       cleanupRoom(roomID);
     });
   }
@@ -168,6 +163,8 @@ io.on('connection', (socket: Socket) => {
     const { roomID, message, id, timestamp } = data;
 
     if (!validate(roomID)) return;
+
+    const userNumber = getUserNumber(roomID, socket.id);
 
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
@@ -187,10 +184,12 @@ io.on('connection', (socket: Socket) => {
     }
 
     roomMessages.push(chatMessage);
+    
+    // Рассылаем всем участникам с номером пользователя
     io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, {
       ...chatMessage,
-      userName: userInfo.get(socket.id)?.name || `User-${socket.id.substring(0, 4)}`
-    }); // Рассылаем всем участникам
+      userNumber: userNumber
+    });
   });
 
   /**
@@ -198,13 +197,7 @@ io.on('connection', (socket: Socket) => {
    */
   socket.on(ACTIONS.REQUEST_CHAT_HISTORY, ({ roomID }: { roomID: string }) => {
     if (roomChats.has(roomID)) {
-      const messages = roomChats.get(roomID) || [];
-      // Добавляем имена пользователей к истории сообщений
-      const messagesWithNames = messages.map(msg => ({
-        ...msg,
-        userName: userInfo.get(msg.sender)?.name || `User-${msg.sender.substring(0, 4)}`
-      }));
-      socket.emit(ACTIONS.CHAT_HISTORY, messagesWithNames);
+      socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
     } else {
       socket.emit(ACTIONS.CHAT_HISTORY, []);
     }
@@ -264,7 +257,6 @@ io.on('connection', (socket: Socket) => {
    * Обработчик полного отключения
    */
   socket.on('disconnect', () => {
-    userInfo.delete(socket.id);
     console.log(`User disconnected: ${socket.id}`);
   });
 });

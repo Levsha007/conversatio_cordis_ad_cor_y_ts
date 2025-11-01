@@ -187,23 +187,24 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   // Демонстрация экрана
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
+      console.log('Starting screen share...');
+      
       // Останавливаем предыдущую демонстрацию экрана
       if (screenShareStream.current) {
         screenShareStream.current.getTracks().forEach(track => track.stop());
         screenShareStream.current = null;
       }
 
+      // Получаем поток экрана
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           cursor: 'always',
           displaySurface: 'window'
         } as any,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+        audio: true // Разрешаем системный звук
       });
+
+      console.log('Screen share stream obtained:', stream.getTracks());
 
       screenShareStream.current = stream;
 
@@ -214,6 +215,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       const videoTracks = stream.getVideoTracks();
       const audioTracks = stream.getAudioTracks();
 
+      console.log('Video tracks:', videoTracks.length, 'Audio tracks:', audioTracks.length);
+
       // Обновляем локальный видеоэлемент для демонстрации экрана
       const localVideo = peerMediaElements.current[LOCAL_VIDEO];
       if (localVideo) {
@@ -221,53 +224,79 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         localVideo.play().catch(e => console.error('Screen share video play error:', e));
       }
 
-      // Для каждого peer соединения добавляем или заменяем треки
-      Object.values(peerConnections.current).forEach(pc => {
-        const senders = pc.getSenders();
-        
-        // Обрабатываем видео трек
-        if (videoTracks.length > 0) {
+      // Для каждого peer соединения заменяем треки
+      const updatePromises = Object.entries(peerConnections.current).map(async ([peerID, pc]) => {
+        try {
+          console.log(`Updating tracks for peer: ${peerID}`);
+          const senders = pc.getSenders();
+          
+          // Находим существующие сендеры
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          if (videoSender) {
-            // Заменяем существующий видео трек
-            videoSender.replaceTrack(videoTracks[0]).catch(e => {
-              console.error('Ошибка при замене видео трека:', e);
-            });
-          } else {
-            // Если нет видеотрека, добавляем новый
-            pc.addTrack(videoTracks[0], stream);
-          }
-        }
-
-        // Обрабатываем аудио трек
-        if (audioTracks.length > 0) {
           const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-          if (audioSender) {
-            audioSender.replaceTrack(audioTracks[0]).catch(e => {
-              console.error('Ошибка при замене аудио трека:', e);
-            });
-          } else {
-            pc.addTrack(audioTracks[0], stream);
+
+          // Заменяем или добавляем видео трек
+          if (videoTracks.length > 0) {
+            if (videoSender) {
+              console.log('Replacing video track');
+              await videoSender.replaceTrack(videoTracks[0]);
+            } else {
+              console.log('Adding new video track');
+              pc.addTrack(videoTracks[0], stream);
+            }
           }
+
+          // Заменяем или добавляем аудио трек
+          if (audioTracks.length > 0) {
+            if (audioSender) {
+              console.log('Replacing audio track');
+              await audioSender.replaceTrack(audioTracks[0]);
+            } else {
+              console.log('Adding new audio track');
+              pc.addTrack(audioTracks[0], stream);
+            }
+          }
+
+          // Создаем новый offer для синхронизации изменений
+          console.log('Creating new offer for screen share');
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID,
+            sessionDescription: offer,
+          });
+
+          console.log(`Screen share update completed for peer: ${peerID}`);
+        } catch (err) {
+          console.error(`Error updating screen share for peer ${peerID}:`, err);
         }
       });
+
+      await Promise.all(updatePromises);
 
       // Обработчик окончания демонстрации экрана (пользователь нажал "Stop Share")
       stream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log('Screen share ended by user');
         stopScreenShare();
       });
 
+      console.log('Screen share started successfully');
     } catch (err) {
       console.error('Ошибка демонстрации экрана:', err);
       setMediaError(err as Error);
-      throw err; // Пробрасываем ошибку дальше
+      throw err;
     }
   }, []);
 
   // Остановка демонстрации экрана
   const stopScreenShare = useCallback((): void => {
+    console.log('Stopping screen share...');
+    
     if (screenShareStream.current) {
-      screenShareStream.current.getTracks().forEach(track => track.stop());
+      screenShareStream.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped screen share track:', track.kind);
+      });
       screenShareStream.current = null;
     }
 
@@ -276,43 +305,81 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     // Восстанавливаем оригинальные треки из камеры/микрофона
     const originalStream = localMediaStream.current;
     
-    if (originalStream) {
-      const videoTracks = originalStream.getVideoTracks();
-      const audioTracks = originalStream.getAudioTracks();
-
-      Object.values(peerConnections.current).forEach(pc => {
+    // Для каждого peer соединения восстанавливаем оригинальные треки
+    Object.entries(peerConnections.current).forEach(async ([peerID, pc]) => {
+      try {
+        console.log(`Restoring original tracks for peer: ${peerID}`);
         const senders = pc.getSenders();
         
-        // Восстанавливаем видео трек
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-        if (videoSender && videoTracks.length > 0) {
-          videoSender.replaceTrack(videoTracks[0]).catch(e => {
-            console.error('Ошибка при восстановлении видео трека:', e);
+        if (originalStream) {
+          const originalVideoTracks = originalStream.getVideoTracks();
+          const originalAudioTracks = originalStream.getAudioTracks();
+
+          // Восстанавливаем видео трек
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender && originalVideoTracks.length > 0) {
+            console.log('Restoring original video track');
+            await videoSender.replaceTrack(originalVideoTracks[0]);
+          } else if (videoSender) {
+            // Если нет оригинального видео, останавливаем видео
+            await videoSender.replaceTrack(null);
+          }
+
+          // Восстанавливаем аудио трек
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+          if (audioSender && originalAudioTracks.length > 0) {
+            console.log('Restoring original audio track');
+            await audioSender.replaceTrack(originalAudioTracks[0]);
+          } else if (audioSender) {
+            // Если нет оригинального аудио, останавливаем аудио
+            await audioSender.replaceTrack(null);
+          }
+
+          // Создаем новый offer для синхронизации изменений
+          console.log('Creating new offer after stopping screen share');
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID,
+            sessionDescription: offer,
+          });
+        } else {
+          // Если нет оригинального потока, останавливаем все треки
+          console.log('No original stream, stopping all tracks');
+          senders.forEach(sender => {
+            if (sender.track) {
+              sender.replaceTrack(null);
+            }
+          });
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID,
+            sessionDescription: offer,
           });
         }
 
-        // Восстанавливаем аудио трек
-        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-        if (audioSender && audioTracks.length > 0) {
-          audioSender.replaceTrack(audioTracks[0]).catch(e => {
-            console.error('Ошибка при восстановлении аудио трека:', e);
-          });
-        }
-      });
+        console.log(`Original tracks restored for peer: ${peerID}`);
+      } catch (err) {
+        console.error(`Error restoring tracks for peer ${peerID}:`, err);
+      }
+    });
 
-      // Восстанавливаем локальное видео
-      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-      if (localVideo) {
+    // Восстанавливаем локальное видео
+    const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+    if (localVideo) {
+      if (originalStream) {
         localVideo.srcObject = originalStream;
         localVideo.play().catch(e => console.error('Local video play error after screen share:', e));
-      }
-    } else {
-      // Если нет оригинального потока, просто очищаем видео
-      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-      if (localVideo) {
+      } else {
         localVideo.srcObject = null;
       }
     }
+
+    console.log('Screen share stopped successfully');
   }, []);
 
   // Переподключение
@@ -505,8 +572,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   useEffect(() => {
     const handleAddPeer = ({ peerID, createOffer }: { 
       peerID: string; 
-      createOffer: boolean;
-      userName?: string;
+      createOffer: boolean 
     }) => {
       setupPeerConnection(peerID, createOffer);
     };
@@ -563,7 +629,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       message: string;
       sender: string;
       timestamp: string;
-      userName?: string;
     }) => {
       addChatMessage({
         id: msg.id,
