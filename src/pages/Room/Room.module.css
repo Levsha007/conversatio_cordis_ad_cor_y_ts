@@ -212,6 +212,121 @@
   font-size: 14px;
 }
 
+/* Стили для полноэкранного режима */
+.videoWrapperFullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1000;
+  background: #000;
+}
+
+.videoWrapperFullscreen .video {
+  object-fit: contain;
+}
+
+.videoWrapperHidden {
+  display: none !important;
+}
+
+/* Кнопка увеличения/уменьшения */
+.fullscreenButton {
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.fullscreenButton:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
+}
+
+.videoWrapperFullscreen .fullscreenButton {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.videoWrapperFullscreen .fullscreenButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Кнопка выхода из полноэкранного режима */
+.exitFullscreenButton {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.exitFullscreenButton:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.05);
+}
+
+/* Адаптация панели управления для полноэкранного режима */
+.videoWrapperFullscreen ~ .controls {
+  z-index: 1001;
+  bottom: 30px;
+}
+
+/* Адаптация чата для полноэкранного режима */
+.videoWrapperFullscreen ~ .chatContainer {
+  z-index: 1001;
+  right: 30px;
+  bottom: 100px;
+}
+
+/* Адаптация настроек для полноэкранного режима */
+.videoWrapperFullscreen ~ .settingsPanel {
+  z-index: 1001;
+  right: 30px;
+  top: 30px;
+}
+
+/* Улучшаем отображение метки пользователя в полноэкранном режиме */
+.videoWrapperFullscreen .userLabel {
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px 15px;
+  font-size: 16px;
+  backdrop-filter: blur(5px);
+}
+
+/* Анимация перехода в полноэкранный режим */
+.videoWrapper {
+  transition: all 0.3s ease;
+}
+
+.videoWrapperFullscreen {
+  animation: expandVideo 0.3s ease-out;
+}
+
+@keyframes expandVideo {
+  from {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* Панель управления (кнопки внизу экрана) */
 .controls {
   position: fixed;
@@ -646,7 +761,7 @@
   color: #2ecc71;
 }
 
-/* Стили для мобильных устройств */
+/* Для мобильных устройств */
 @media (max-width: 767px) {
   .roomContainer {
     flex-direction: column;
@@ -690,6 +805,26 @@
     flex-direction: column;
   }
 
+  .videoWrapperFullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  .exitFullscreenButton {
+    top: 10px;
+    right: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .videoWrapperFullscreen .userLabel {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
   .chatContainer {
     position: fixed;
     right: 10px;
@@ -714,26 +849,4 @@
     height: 40px;
     font-size: 0.9em;
   }
-}
-
-/* Стили для пустого видео */
-.videoWrapper:has(.video[srcObject=""]) .userLabel,
-.videoWrapper:has(.video:not([srcObject])) .userLabel {
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
-.videoWrapper:has(.video[srcObject=""]) .video,
-.videoWrapper:has(.video:not([srcObject])) .video {
-  background: linear-gradient(45deg, #1a1a1a, #2d2d2d);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.videoWrapper:has(.video[srcObject=""]) .video::before,
-.videoWrapper:has(.video:not([srcObject])) .video::before {
-  content: "Нет видео";
-  color: #888;
-  font-size: 16px;
-  font-family: Arial, sans-serif;
 }

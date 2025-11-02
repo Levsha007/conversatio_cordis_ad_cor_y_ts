@@ -166,9 +166,22 @@ const DeviceSelection: React.FC<{
 };
 
 /**
- * Функция расчета расположения видео элементов
+ * Функция расчета расположения видео элементов с поддержкой полноэкранного режима
  */
-function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
+function calculateLayout(
+  clientsCount: number = 1, 
+  isMobile: boolean, 
+  fullscreenParticipant: string | null = null
+): LayoutItem[] {
+  // Если выбран полноэкранный режим, все элементы получают базовый размер
+  // но только выбранный участник будет виден благодаря CSS
+  if (fullscreenParticipant) {
+    return Array(clientsCount).fill({
+      width: '100%',
+      height: '100%'
+    });
+  }
+
   if (isMobile) {
     return Array(clientsCount).fill({
       width: '100%',
@@ -231,7 +244,6 @@ const Room: React.FC = () => {
   // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
-  const videoLayout = calculateLayout(clients.length, isMobile);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
   const [messageInput, setMessageInput] = useState('');
@@ -242,6 +254,7 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
+  const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
 
   // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +265,36 @@ const Room: React.FC = () => {
       setMessages(getChatMessages());
     }
   }, [getChatMessages]);
+
+  // Обновляем videoLayout при изменении клиентов или полноэкранного режима
+  const videoLayout = calculateLayout(clients.length, isMobile, fullscreenParticipant);
+
+  /**
+   * Переключение полноэкранного режима для участника
+   */
+  const toggleFullscreen = (clientID: string) => {
+    if (fullscreenParticipant === clientID) {
+      setFullscreenParticipant(null);
+    } else {
+      setFullscreenParticipant(clientID);
+    }
+  };
+
+  /**
+   * Обработчик выбора устройств
+   */
+  const handleDeviceSelection = async (settings: DeviceSettings) => {
+    setShowDeviceSelection(false);
+    await initializeMedia(settings);
+    setDevicesInitialized(true);
+  };
+
+  /**
+   * Отмена выбора устройств
+   */
+  const handleCancelDeviceSelection = () => {
+    navigate('/');
+  };
 
   /**
    * Получение отображаемого имени пользователя
@@ -269,22 +312,6 @@ const Room: React.FC = () => {
     if (senderId === socket.id) return 'Вы';
     const number = userNumbers[senderId];
     return number ? `Участник ${number}` : `Участник`;
-  };
-
-  /**
-   * Обработчик выбора устройств
-   */
-  const handleDeviceSelection = async (settings: DeviceSettings) => {
-    setShowDeviceSelection(false);
-    await initializeMedia(settings);
-    setDevicesInitialized(true);
-  };
-
-  /**
-   * Отмена выбора устройств
-   */
-  const handleCancelDeviceSelection = () => {
-    navigate('/');
   };
 
   /**
@@ -594,7 +621,16 @@ const Room: React.FC = () => {
 
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
-        <div key={`${clientID}-${retryCount}`} className={styles.videoWrapper} style={videoLayout[index]}>
+        <div 
+          key={`${clientID}-${retryCount}`} 
+          className={`${styles.videoWrapper} ${
+            fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
+          } ${
+            fullscreenParticipant && fullscreenParticipant !== clientID ? styles.videoWrapperHidden : ''
+          }`}
+          style={videoLayout[index]}
+          onClick={() => toggleFullscreen(clientID)}
+        >
           <video
             ref={(instance) => provideMediaRef(clientID, instance)}
             autoPlay
@@ -611,9 +647,32 @@ const Room: React.FC = () => {
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
             {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
             {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
+            
+            {/* Кнопка увеличения/уменьшения */}
+            <button 
+              className={styles.fullscreenButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen(clientID);
+              }}
+              title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
+            >
+              {fullscreenParticipant === clientID ? '⤢' : '⤡'}
+            </button>
           </div>
         </div>
       ))}
+
+      {/* Кнопка выхода из полноэкранного режима (показывается только в полноэкранном режиме) */}
+      {fullscreenParticipant && (
+        <button 
+          className={styles.exitFullscreenButton}
+          onClick={() => setFullscreenParticipant(null)}
+          title="Выйти из полноэкранного режима"
+        >
+          ✕ Выйти из полноэкранного режима
+        </button>
+      )}
 
       {/* Панель управления */}
       <div className={styles.controls}>

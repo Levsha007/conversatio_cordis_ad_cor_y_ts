@@ -101,12 +101,16 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }, cb);
   }, [updateClients]);
 
-  // Получить параметры медиапотока
+  // Получить параметры медиапотока - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ НЕСТАНДАРТНЫХ СВОЙСТВ
   const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
     audio: constraints.audio ? {
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true
+      autoGainControl: true,
+      channelCount: 2, // Стерео звук вместо моно
+      sampleRate: 48000, // Высокая частота дискретизации
+      sampleSize: 16, // Высокое качество
+      // Убраны нестандартные свойства для совместимости с TypeScript
     } : false,
     video: constraints.video ? {
       width: { ideal: 1280 },
@@ -184,7 +188,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID]);
 
-  // Демонстрация экрана
+  // Демонстрация экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ НЕСТАНДАРТНЫХ СВОЙСТВ
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
       console.log('Starting screen share...');
@@ -195,13 +199,22 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         screenShareStream.current = null;
       }
 
-      // Получаем поток экрана
+      // Получаем поток экрана с улучшенными настройками звука
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           cursor: 'always',
           displaySurface: 'window'
         } as any,
-        audio: true // Разрешаем системный звук
+        audio: {
+          // Улучшенные настройки звука для демонстрации экрана
+          echoCancellation: false, // Для системного звука эхоподавление может мешать
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16,
+          // Убраны нестандартные свойства для совместимости с TypeScript
+        }
       });
 
       console.log('Screen share stream obtained:', stream.getTracks());
@@ -216,6 +229,27 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       const audioTracks = stream.getAudioTracks();
 
       console.log('Video tracks:', videoTracks.length, 'Audio tracks:', audioTracks.length);
+
+      // Настраиваем битрейт для видео для лучшего качества
+      if (videoTracks.length > 0) {
+        const videoTrack = videoTracks[0];
+        // Пытаемся установить высокий битрейт для лучшего качества
+        try {
+          const capabilities = videoTrack.getCapabilities();
+          const settings = videoTrack.getSettings();
+          
+          // Если поддерживается, устанавливаем ограничения для лучшего качества
+          if (capabilities && 'width' in capabilities) {
+            await videoTrack.applyConstraints({
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              frameRate: { ideal: 30 }
+            });
+          }
+        } catch (err) {
+          console.warn('Could not apply video constraints for screen share:', err);
+        }
+      }
 
       // Обновляем локальный видеоэлемент для демонстрации экрана
       const localVideo = peerMediaElements.current[LOCAL_VIDEO];
@@ -239,6 +273,21 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             if (videoSender) {
               console.log('Replacing video track');
               await videoSender.replaceTrack(videoTracks[0]);
+              
+              // Пытаемся настроить параметры кодирования для лучшего качества
+              try {
+                const params = videoSender.getParameters();
+                if (!params.encodings) {
+                  params.encodings = [{}];
+                }
+                // Устанавливаем высокий битрейт для лучшего качества
+                params.encodings[0].maxBitrate = 2500000; // 2.5 Mbps
+                params.encodings[0].priority = 'high';
+                params.encodings[0].networkPriority = 'high';
+                await videoSender.setParameters(params);
+              } catch (err) {
+                console.warn('Could not set video encoding parameters:', err);
+              }
             } else {
               console.log('Adding new video track');
               pc.addTrack(videoTracks[0], stream);
@@ -250,6 +299,20 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             if (audioSender) {
               console.log('Replacing audio track');
               await audioSender.replaceTrack(audioTracks[0]);
+              
+              // Пытаемся настроить параметры кодирования для лучшего качества звука
+              try {
+                const params = audioSender.getParameters();
+                if (!params.encodings) {
+                  params.encodings = [{}];
+                }
+                // Устанавливаем высокий битрейт для звука
+                params.encodings[0].maxBitrate = 128000; // 128 kbps
+                params.encodings[0].priority = 'high';
+                await audioSender.setParameters(params);
+              } catch (err) {
+                console.warn('Could not set audio encoding parameters:', err);
+              }
             } else {
               console.log('Adding new audio track');
               pc.addTrack(audioTracks[0], stream);
@@ -258,7 +321,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
           // Создаем новый offer для синхронизации изменений
           console.log('Creating new offer for screen share');
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
           await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
@@ -337,7 +403,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
           // Создаем новый offer для синхронизации изменений
           console.log('Creating new offer after stopping screen share');
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
           await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
@@ -353,7 +422,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             }
           });
 
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
           await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
