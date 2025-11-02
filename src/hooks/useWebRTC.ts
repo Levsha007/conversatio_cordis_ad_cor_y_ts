@@ -32,6 +32,18 @@ interface ChatMessage {
   sender: string;     // ID отправителя
 }
 
+interface ParticipantSettings {
+  videoEnabled: boolean;
+  audioEnabled: boolean;
+}
+
+interface QualitySettings {
+  videoBitrate: number;
+  audioBitrate: number;
+  videoResolution: string;
+  frameRate: number;
+}
+
 type UseWebRTCReturn = {
   clients: string[];
   provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
@@ -49,6 +61,13 @@ type UseWebRTCReturn = {
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => void;
   initializeMedia: (constraints: { audio: boolean; video: boolean }) => Promise<void>;
+  // Новые функции
+  participantSettings: Record<string, ParticipantSettings>;
+  toggleParticipantVideo: (peerId: string) => void;
+  toggleParticipantAudio: (peerId: string) => void;
+  qualitySettings: QualitySettings;
+  updateQualitySettings: (settings: Partial<QualitySettings>) => void;
+  applyQualitySettings: () => Promise<void>;
 };
 
 // Проверка доступности WebRTC
@@ -79,6 +98,15 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     video: []
   });
 
+  // Новые состояния для управления участниками и качеством
+  const [participantSettings, setParticipantSettings] = useState<Record<string, ParticipantSettings>>({});
+  const [qualitySettings, setQualitySettings] = useState<QualitySettings>({
+    videoBitrate: 1500000, // 1.5 Mbps
+    audioBitrate: 64000,   // 64 kbps
+    videoResolution: '720p',
+    frameRate: 30
+  });
+
   // Рефы для хранения данных между рендерами
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const localMediaStream = useRef<MediaStream | null>(null);
@@ -101,7 +129,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }, cb);
   }, [updateClients]);
 
-  // Получить параметры медиапотока - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ НЕСТАНДАРТНЫХ СВОЙСТВ
+  // Получить параметры медиапотока - ИСПРАВЛЕННАЯ ВЕРСИЯ (без нестандартных свойств)
   const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
     audio: constraints.audio ? {
       echoCancellation: true,
@@ -110,7 +138,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       channelCount: 2, // Стерео звук вместо моно
       sampleRate: 48000, // Высокая частота дискретизации
       sampleSize: 16, // Высокое качество
-      // Убраны нестандартные свойства для совместимости с TypeScript
     } : false,
     video: constraints.video ? {
       width: { ideal: 1280 },
@@ -132,7 +159,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, []);
 
-  // Инициализация медиапотока
+  // Инициализация медиапотока - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }): Promise<void> => {
     setMediaError(null);
     setIsMediaReady(false);
@@ -188,7 +215,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID]);
 
-  // Демонстрация экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ НЕСТАНДАРТНЫХ СВОЙСТВ
+  // Демонстрация экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ (без нестандартных свойств)
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
       console.log('Starting screen share...');
@@ -213,7 +240,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           channelCount: 2,
           sampleRate: 48000,
           sampleSize: 16,
-          // Убраны нестандартные свойства для совместимости с TypeScript
         }
       });
 
@@ -354,7 +380,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, []);
 
-  // Остановка демонстрации экрана
+  // Остановка демонстрации экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const stopScreenShare = useCallback((): void => {
     console.log('Stopping screen share...');
     
@@ -403,10 +429,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
           // Создаем новый offer для синхронизации изменений
           console.log('Creating new offer after stopping screen share');
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true
-          });
+          const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
@@ -422,10 +445,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             }
           });
 
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true
-          });
+          const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
@@ -554,6 +574,117 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [enumerateDevices, mediaState]);
 
+  // Функции управления участниками
+  const toggleParticipantVideo = useCallback((peerId: string) => {
+    setParticipantSettings(prev => ({
+      ...prev,
+      [peerId]: {
+        ...prev[peerId],
+        videoEnabled: !(prev[peerId]?.videoEnabled ?? true)
+      }
+    }));
+
+    // Обновляем видео элемент
+    const videoElement = peerMediaElements.current[peerId];
+    if (videoElement) {
+      videoElement.style.display = participantSettings[peerId]?.videoEnabled ? 'none' : 'block';
+    }
+  }, [participantSettings]);
+
+  const toggleParticipantAudio = useCallback((peerId: string) => {
+    setParticipantSettings(prev => ({
+      ...prev,
+      [peerId]: {
+        ...prev[peerId],
+        audioEnabled: !(prev[peerId]?.audioEnabled ?? true)
+      }
+    }));
+
+    // Обновляем видео элемент
+    const videoElement = peerMediaElements.current[peerId];
+    if (videoElement) {
+      videoElement.muted = !participantSettings[peerId]?.audioEnabled;
+    }
+  }, [participantSettings]);
+
+  // Функции управления качеством
+  const updateQualitySettings = useCallback((settings: Partial<QualitySettings>) => {
+    setQualitySettings(prev => ({ ...prev, ...settings }));
+  }, []);
+
+  const applyQualitySettings = useCallback(async (): Promise<void> => {
+    try {
+      console.log('Applying quality settings:', qualitySettings);
+
+      // Применяем настройки ко всем активным peer соединениям
+      Object.entries(peerConnections.current).forEach(async ([peerId, pc]) => {
+        const senders = pc.getSenders();
+        
+        for (const sender of senders) {
+          if (sender.track) {
+            try {
+              const params = sender.getParameters();
+              
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+
+              if (sender.track.kind === 'video') {
+                // Настройки видео
+                params.encodings[0].maxBitrate = qualitySettings.videoBitrate;
+                params.encodings[0].scaleResolutionDownBy = 
+                  qualitySettings.videoResolution === '1080p' ? 1 :
+                  qualitySettings.videoResolution === '720p' ? 1.5 :
+                  qualitySettings.videoResolution === '480p' ? 2 : 3;
+                
+                // Пытаемся применить ограничения к треку
+                if (sender.track.kind === 'video') {
+                  await sender.track.applyConstraints({
+                    width: { ideal: 
+                      qualitySettings.videoResolution === '1080p' ? 1920 :
+                      qualitySettings.videoResolution === '720p' ? 1280 :
+                      qualitySettings.videoResolution === '480p' ? 854 : 640
+                    },
+                    height: { ideal: 
+                      qualitySettings.videoResolution === '1080p' ? 1080 :
+                      qualitySettings.videoResolution === '720p' ? 720 :
+                      qualitySettings.videoResolution === '480p' ? 480 : 360
+                    },
+                    frameRate: { ideal: qualitySettings.frameRate }
+                  });
+                }
+              } else if (sender.track.kind === 'audio') {
+                // Настройки аудио
+                params.encodings[0].maxBitrate = qualitySettings.audioBitrate;
+              }
+
+              await sender.setParameters(params);
+              console.log(`Quality settings applied for ${sender.track.kind} track`);
+            } catch (err) {
+              console.warn(`Could not apply quality settings for ${sender.track.kind}:`, err);
+            }
+          }
+        }
+
+        // Пересоздаем offer с новыми настройками
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID: peerId,
+            sessionDescription: offer,
+          });
+        } catch (err) {
+          console.warn('Could not recreate offer with new quality settings:', err);
+        }
+      });
+
+      console.log('Quality settings applied successfully');
+    } catch (err) {
+      console.error('Error applying quality settings:', err);
+    }
+  }, [qualitySettings]);
+
   // Установка соединения с пиром
   const setupPeerConnection = useCallback(async (
     peerID: string, 
@@ -627,10 +758,16 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     if (node) {
       node.autoplay = true;
       node.playsInline = true;
-      node.muted = id === LOCAL_VIDEO;
+      node.muted = id === LOCAL_VIDEO || !participantSettings[id]?.audioEnabled;
+      
+      // Применяем настройки отображения видео
+      if (id !== LOCAL_VIDEO && participantSettings[id]) {
+        node.style.display = participantSettings[id].videoEnabled ? 'block' : 'none';
+      }
+      
       peerMediaElements.current[id] = node;
     }
-  }, []);
+  }, [participantSettings]);
 
   // Инициализация WebRTC при изменении roomID
   useEffect(() => {
@@ -640,11 +777,37 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [roomID]);
 
+  // Инициализация настроек участников при добавлении
+  useEffect(() => {
+    clients.forEach(clientId => {
+      if (clientId !== LOCAL_VIDEO && !participantSettings[clientId]) {
+        setParticipantSettings(prev => ({
+          ...prev,
+          [clientId]: {
+            videoEnabled: true,
+            audioEnabled: true
+          }
+        }));
+      }
+    });
+  }, [clients, participantSettings]);
+
+  // Применяем настройки качества при изменении
+  useEffect(() => {
+    if (Object.keys(peerConnections.current).length > 0) {
+      applyQualitySettings();
+    }
+  }, [qualitySettings, applyQualitySettings]);
+
   // Подписка на события Socket.IO
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer }: { 
+    const handleAddPeer = ({ 
+      peerID, 
+      createOffer 
+    }: { 
       peerID: string; 
-      createOffer: boolean 
+      createOffer: boolean;
+      userNumber?: number;
     }) => {
       setupPeerConnection(peerID, createOffer);
     };
@@ -701,6 +864,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       message: string;
       sender: string;
       timestamp: string;
+      userNumber?: number;
     }) => {
       addChatMessage({
         id: msg.id,
@@ -767,6 +931,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     reconnect,
     startScreenShare,
     stopScreenShare,
-    initializeMedia
+    initializeMedia,
+    // Новые функции
+    participantSettings,
+    toggleParticipantVideo,
+    toggleParticipantAudio,
+    qualitySettings,
+    updateQualitySettings,
+    applyQualitySettings
   };
 }
