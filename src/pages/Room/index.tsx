@@ -37,10 +37,7 @@ interface DeviceSettings {
  * Интерфейс для настроек качества
  */
 interface QualitySettings {
-  videoBitrate: number;
-  audioBitrate: number;
   videoResolution: string;
-  frameRate: number;
 }
 
 /**
@@ -261,6 +258,8 @@ const Room: React.FC = () => {
   // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
+  const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
+  const videoLayout = calculateLayout(clients.length, isMobile, fullscreenParticipant);
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
   const [messageInput, setMessageInput] = useState('');
@@ -272,9 +271,6 @@ const Room: React.FC = () => {
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
 
-  // Новое состояние для полноэкранного режима
-  const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
-
   // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -284,13 +280,6 @@ const Room: React.FC = () => {
       setMessages(getChatMessages());
     }
   }, [getChatMessages]);
-
-  // Обновляем функцию calculateLayout для поддержки полноэкранного режима
-  const videoLayout = calculateLayout(
-    clients.length, 
-    isMobile, 
-    fullscreenParticipant
-  );
 
   /**
    * Обработчик выбора устройств
@@ -397,6 +386,25 @@ const Room: React.FC = () => {
   };
 
   /**
+   * Функции для управления качеством
+   */
+  const handleQualityChange = (newSettings: Partial<QualitySettings>) => {
+    updateQualitySettings(newSettings);
+  };
+
+  const applyQuality = () => {
+    applyQualitySettings();
+  };
+
+  // Предустановки качества
+  const qualityPresets = {
+    '360p': { videoResolution: '360p' },
+    '480p': { videoResolution: '480p' },
+    '720p': { videoResolution: '720p' },
+    '1080p': { videoResolution: '1080p' }
+  };
+
+  /**
    * Отправка сообщения в чат
    */
   const handleSendMessage = () => {
@@ -460,37 +468,6 @@ const Room: React.FC = () => {
     // Сбрасываем значение инпута, чтобы можно было выбрать тот же файл снова
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
-    }
-  };
-
-  // Функции для управления качеством
-  const handleQualityChange = (newSettings: Partial<QualitySettings>) => {
-    updateQualitySettings(newSettings);
-  };
-
-  const applyQuality = () => {
-    applyQualitySettings();
-  };
-
-  // Предустановки качества
-  const qualityPresets = {
-    low: {
-      videoBitrate: 500000,
-      audioBitrate: 32000,
-      videoResolution: '360p',
-      frameRate: 15
-    },
-    medium: {
-      videoBitrate: 1000000,
-      audioBitrate: 64000,
-      videoResolution: '720p',
-      frameRate: 30
-    },
-    high: {
-      videoBitrate: 2500000,
-      audioBitrate: 128000,
-      videoResolution: '1080p',
-      frameRate: 30
     }
   };
 
@@ -683,7 +660,6 @@ const Room: React.FC = () => {
             fullscreenParticipant && fullscreenParticipant !== clientID ? styles.videoWrapperHidden : ''
           }`}
           style={videoLayout[index]}
-          onClick={() => toggleFullscreen(clientID)}
         >
           <video
             ref={(instance) => provideMediaRef(clientID, instance)}
@@ -697,35 +673,8 @@ const Room: React.FC = () => {
             }`}
           />
           
-          {/* Метка пользователя */}
-          <div className={styles.userLabel}>
-            {getUserDisplayName(clientID)}
-            
-            {/* Индикаторы состояния медиа */}
-            {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
-            {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
-            {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
-            
-            {/* Индикаторы отключенного контента */}
-            {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
-              <span className={styles.videoDisabledIndicator}>📹❌</span>
-            )}
-            {!participantSettings[clientID]?.audioEnabled && clientID !== LOCAL_VIDEO && (
-              <span className={styles.audioDisabledIndicator}>🎤❌</span>
-            )}
-            
-            {/* Кнопка увеличения/уменьшения */}
-            <button 
-              className={styles.fullscreenButton}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFullscreen(clientID);
-              }}
-              title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
-            >
-              {fullscreenParticipant === clientID ? '⤢' : '⤡'}
-            </button>
-
+          {/* Верхняя панель управления */}
+          <div className={styles.videoTopControls}>
             {/* Кнопки управления для других участников */}
             {clientID !== LOCAL_VIDEO && (
               <div className={styles.participantControls}>
@@ -733,28 +682,40 @@ const Room: React.FC = () => {
                   className={`${styles.participantControlButton} ${
                     !participantSettings[clientID]?.videoEnabled ? styles.participantControlButtonActive : ''
                   }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleParticipantVideo(clientID);
-                  }}
+                  onClick={() => toggleParticipantVideo(clientID)}
                   title={participantSettings[clientID]?.videoEnabled ? "Скрыть видео" : "Показать видео"}
                 >
-                  📹
+                  {participantSettings[clientID]?.videoEnabled ? '📹' : '📹❌'}
                 </button>
                 <button
                   className={`${styles.participantControlButton} ${
                     !participantSettings[clientID]?.audioEnabled ? styles.participantControlButtonActive : ''
                   }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleParticipantAudio(clientID);
-                  }}
+                  onClick={() => toggleParticipantAudio(clientID)}
                   title={participantSettings[clientID]?.audioEnabled ? "Отключить звук" : "Включить звук"}
                 >
-                  🎤
+                  {participantSettings[clientID]?.audioEnabled ? '🎤' : '🎤❌'}
                 </button>
               </div>
             )}
+
+            {/* Кнопка увеличения/уменьшения */}
+            <button 
+              className={styles.fullscreenButton}
+              onClick={() => toggleFullscreen(clientID)}
+              title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
+            >
+              {fullscreenParticipant === clientID ? '⤢' : '⤡'}
+            </button>
+          </div>
+
+          {/* Метка пользователя */}
+          <div className={styles.userLabel}>
+            {getUserDisplayName(clientID)}
+            {/* Индикаторы состояния медиа */}
+            {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
+            {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
+            {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
           </div>
         </div>
       ))}
@@ -967,96 +928,41 @@ const Room: React.FC = () => {
 
           {/* Секция качества соединения */}
           <div className={styles.settingsSection}>
-            <h4 className={styles.settingsSubtitle}>Качество соединения</h4>
+            <h4 className={styles.settingsSubtitle}>Качество видео</h4>
             
             <div className={styles.qualityPresets}>
               <button
                 className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoBitrate === qualityPresets.low.videoBitrate ? styles.qualityPresetButtonActive : ''
+                  qualitySettings.videoResolution === '360p' ? styles.qualityPresetButtonActive : ''
                 }`}
-                onClick={() => handleQualityChange(qualityPresets.low)}
+                onClick={() => handleQualityChange(qualityPresets['360p'])}
               >
-                Низкое
+                360p
               </button>
               <button
                 className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoBitrate === qualityPresets.medium.videoBitrate ? styles.qualityPresetButtonActive : ''
+                  qualitySettings.videoResolution === '480p' ? styles.qualityPresetButtonActive : ''
                 }`}
-                onClick={() => handleQualityChange(qualityPresets.medium)}
+                onClick={() => handleQualityChange(qualityPresets['480p'])}
               >
-                Среднее
+                480p
               </button>
               <button
                 className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoBitrate === qualityPresets.high.videoBitrate ? styles.qualityPresetButtonActive : ''
+                  qualitySettings.videoResolution === '720p' ? styles.qualityPresetButtonActive : ''
                 }`}
-                onClick={() => handleQualityChange(qualityPresets.high)}
+                onClick={() => handleQualityChange(qualityPresets['720p'])}
               >
-                Высокое
+                720p
               </button>
-            </div>
-
-            <div className={styles.qualitySettings}>
-              <div className={styles.qualitySetting}>
-                <label className={styles.settingsLabel}>
-                  Разрешение видео:
-                  <select
-                    value={qualitySettings.videoResolution}
-                    onChange={(e) => handleQualityChange({ videoResolution: e.target.value })}
-                    className={styles.qualitySelect}
-                  >
-                    <option value="360p">360p (экономный)</option>
-                    <option value="480p">480p (сбалансированный)</option>
-                    <option value="720p">720p (качественный)</option>
-                    <option value="1080p">1080p (максимальный)</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.qualitySetting}>
-                <label className={styles.settingsLabel}>
-                  Битрейт видео: {qualitySettings.videoBitrate / 1000} kbps
-                  <input
-                    type="range"
-                    min="300"
-                    max="5000"
-                    step="100"
-                    value={qualitySettings.videoBitrate / 1000}
-                    onChange={(e) => handleQualityChange({ videoBitrate: parseInt(e.target.value) * 1000 })}
-                    className={styles.qualitySlider}
-                  />
-                </label>
-              </div>
-
-              <div className={styles.qualitySetting}>
-                <label className={styles.settingsLabel}>
-                  Битрейт аудио: {qualitySettings.audioBitrate / 1000} kbps
-                  <input
-                    type="range"
-                    min="32"
-                    max="128"
-                    step="8"
-                    value={qualitySettings.audioBitrate / 1000}
-                    onChange={(e) => handleQualityChange({ audioBitrate: parseInt(e.target.value) * 1000 })}
-                    className={styles.qualitySlider}
-                  />
-                </label>
-              </div>
-
-              <div className={styles.qualitySetting}>
-                <label className={styles.settingsLabel}>
-                  Частота кадров: {qualitySettings.frameRate} fps
-                  <input
-                    type="range"
-                    min="15"
-                    max="30"
-                    step="5"
-                    value={qualitySettings.frameRate}
-                    onChange={(e) => handleQualityChange({ frameRate: parseInt(e.target.value) })}
-                    className={styles.qualitySlider}
-                  />
-                </label>
-              </div>
+              <button
+                className={`${styles.qualityPresetButton} ${
+                  qualitySettings.videoResolution === '1080p' ? styles.qualityPresetButtonActive : ''
+                }`}
+                onClick={() => handleQualityChange(qualityPresets['1080p'])}
+              >
+                1080p
+              </button>
             </div>
 
             <button
