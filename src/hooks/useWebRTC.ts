@@ -88,6 +88,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     video: []
   });
   const [participantSettings, setParticipantSettings] = useState<Record<string, ParticipantSettings>>({});
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
+  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>('');
 
   // Рефы для хранения данных между рендерами
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
@@ -141,7 +143,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }, cb);
   }, [updateClients]);
 
-  // Получить параметры медиапотока
+  // Получить параметры медиапотока с учетом выбранных устройств
   const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
     audio: constraints.audio ? {
       echoCancellation: true,
@@ -149,27 +151,40 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       autoGainControl: true,
       channelCount: 2,
       sampleRate: 48000,
-      sampleSize: 16
+      sampleSize: 16,
+      deviceId: selectedAudioDevice ? { exact: selectedAudioDevice } : undefined
     } : false,
     video: constraints.video ? {
       width: { ideal: 1280 },
       height: { ideal: 720 },
-      frameRate: { ideal: 30 }
+      frameRate: { ideal: 30 },
+      deviceId: selectedVideoDevice ? { exact: selectedVideoDevice } : undefined
     } : false
-  }), []);
+  }), [selectedAudioDevice, selectedVideoDevice]);
 
   // Перечисление доступных устройств
   const enumerateDevices = useCallback(async (): Promise<void> => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioDevices = devices.filter(d => d.kind === 'audioinput');
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      
       setAvailableDevices({
-        audio: devices.filter(d => d.kind === 'audioinput'),
-        video: devices.filter(d => d.kind === 'videoinput')
+        audio: audioDevices,
+        video: videoDevices
       });
+
+      // Автоматически выбираем первое доступное устройство, если не выбрано
+      if (!selectedAudioDevice && audioDevices.length > 0) {
+        setSelectedAudioDevice(audioDevices[0].deviceId);
+      }
+      if (!selectedVideoDevice && videoDevices.length > 0) {
+        setSelectedVideoDevice(videoDevices[0].deviceId);
+      }
     } catch (err) {
       console.error('Ошибка получения устройств:', err);
     }
-  }, []);
+  }, [selectedAudioDevice, selectedVideoDevice]);
 
   // Инициализация медиапотока - УЛУЧШЕННАЯ ВЕРСИЯ
   const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }): Promise<void> => {
@@ -235,7 +250,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID]);
 
-  // Демонстрация экрана
+  // Демонстрация экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
       console.log('Starting screen share...');
@@ -268,45 +283,50 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         localVideo.play().catch(e => console.error('Screen share video play error:', e));
       }
 
-      // Обновляем все peer соединения
-      Object.entries(peerConnections.current).forEach(async ([peerID, pc]) => {
-        try {
-          const senders = pc.getSenders();
-          
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+      // Обновляем все peer соединения - ИСПРАВЛЕННЫЙ КОД
+      await Promise.all(
+        Object.entries(peerConnections.current).map(async ([peerID, pc]) => {
+          try {
+            const senders = pc.getSenders();
+            
+            // Находим отправители для видео и аудио
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
 
-          // Заменяем видео
-          if (videoTracks.length > 0) {
-            if (videoSender) {
-              await videoSender.replaceTrack(videoTracks[0]);
-            } else {
-              pc.addTrack(videoTracks[0], stream);
+            // Заменяем видео трек
+            if (videoTracks.length > 0) {
+              if (videoSender) {
+                await videoSender.replaceTrack(videoTracks[0]);
+              } else {
+                pc.addTrack(videoTracks[0], stream);
+              }
             }
-          }
 
-          // Заменяем аудио
-          if (audioTracks.length > 0) {
-            if (audioSender) {
-              await audioSender.replaceTrack(audioTracks[0]);
-            } else {
-              pc.addTrack(audioTracks[0], stream);
+            // Заменяем аудио трек
+            if (audioTracks.length > 0) {
+              if (audioSender) {
+                await audioSender.replaceTrack(audioTracks[0]);
+              } else {
+                pc.addTrack(audioTracks[0], stream);
+              }
             }
+
+            // Перезапускаем переговоры для всех пиров
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            
+            socket.emit(ACTIONS.RELAY_SDP, {
+              peerID,
+              sessionDescription: offer,
+            });
+
+            console.log(`Screen share offer sent to peer ${peerID}`);
+
+          } catch (err) {
+            console.error(`Error updating screen share for peer ${peerID}:`, err);
           }
-
-          // Создаем новый offer
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          
-          socket.emit(ACTIONS.RELAY_SDP, {
-            peerID,
-            sessionDescription: offer,
-          });
-
-        } catch (err) {
-          console.error(`Error updating screen share for peer ${peerID}:`, err);
-        }
-      });
+        })
+      );
 
       // Обработчик окончания демонстрации экрана
       stream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -321,7 +341,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, []);
 
-  // Остановка демонстрации экрана
+  // Остановка демонстрации экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const stopScreenShare = useCallback((): void => {
     if (screenShareStream.current) {
       screenShareStream.current.getTracks().forEach(track => track.stop());
@@ -333,6 +353,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     // Восстанавливаем оригинальные треки
     const originalStream = localMediaStream.current;
     
+    // Обновляем все peer соединения
     Object.entries(peerConnections.current).forEach(async ([peerID, pc]) => {
       try {
         const senders = pc.getSenders();
@@ -341,6 +362,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           const originalVideoTracks = originalStream.getVideoTracks();
           const originalAudioTracks = originalStream.getAudioTracks();
 
+          // Восстанавливаем оригинальные треки
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
           if (videoSender && originalVideoTracks.length > 0) {
             await videoSender.replaceTrack(originalVideoTracks[0]);
@@ -352,7 +374,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           }
         }
 
-        // Создаем новый offer
+        // Перезапускаем переговоры
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         
@@ -360,6 +382,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           peerID,
           sessionDescription: offer,
         });
+
+        console.log(`Screen share stopped, offer sent to peer ${peerID}`);
 
       } catch (err) {
         console.error(`Error restoring tracks for peer ${peerID}:`, err);
@@ -377,6 +401,82 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       }
     }
   }, []);
+
+  // Переключение медиаустройства - УЛУЧШЕННАЯ ВЕРСИЯ
+  const switchMediaDevice = useCallback(async (
+    type: 'audio' | 'video',
+    deviceId?: string
+  ): Promise<boolean> => {
+    try {
+      // Сохраняем выбранное устройство
+      if (type === 'audio' && deviceId) {
+        setSelectedAudioDevice(deviceId);
+      } else if (type === 'video' && deviceId) {
+        setSelectedVideoDevice(deviceId);
+      }
+
+      const oldTracks = localMediaStream.current?.getTracks()
+        .filter(track => track.kind === type) || [];
+      oldTracks.forEach(track => {
+        track.stop();
+        localMediaStream.current?.removeTrack(track);
+      });
+
+      const constraints: MediaStreamConstraints = {
+        [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const newTracks = stream.getTracks();
+
+      if (!localMediaStream.current) {
+        localMediaStream.current = new MediaStream();
+      }
+
+      newTracks.forEach(track => {
+        localMediaStream.current?.addTrack(track);
+        track.enabled = mediaState[type];
+      });
+
+      // Обновляем все peer соединения с новыми треками
+      await Promise.all(
+        Object.values(peerConnections.current).map(async (pc) => {
+          const senders = pc.getSenders();
+          await Promise.all(
+            senders.map(async (sender) => {
+              if (sender.track?.kind === type) {
+                const newTrack = newTracks.find(t => t.kind === type);
+                if (newTrack) {
+                  try {
+                    await sender.replaceTrack(newTrack);
+                  } catch (e) {
+                    console.error('Ошибка при замене трека:', e);
+                  }
+                }
+              }
+            })
+          );
+        })
+      );
+
+      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+      if (localVideo && localMediaStream.current) {
+        localVideo.srcObject = new MediaStream(
+          localMediaStream.current.getTracks()
+        );
+        localVideo.play().catch(e => console.error('Local video play error:', e));
+      }
+
+      await enumerateDevices();
+      return true;
+    } catch (err) {
+      console.error(`Ошибка переключения устройства ${type}:`, err);
+      return false;
+    }
+  }, [enumerateDevices, mediaState]);
+
+  // Остальные функции остаются без изменений...
+  // [Остальной код остается таким же как в оригинале, чтобы не превышать лимит ответа]
 
   // Переподключение
   const reconnect = useCallback(async (): Promise<void> => {
@@ -419,63 +519,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       return newState;
     });
   }, []);
-
-  // Переключение медиаустройства
-  const switchMediaDevice = useCallback(async (
-    type: 'audio' | 'video',
-    deviceId?: string
-  ): Promise<boolean> => {
-    try {
-      const oldTracks = localMediaStream.current?.getTracks()
-        .filter(track => track.kind === type) || [];
-      oldTracks.forEach(track => {
-        track.stop();
-        localMediaStream.current?.removeTrack(track);
-      });
-
-      const constraints: MediaStreamConstraints = {
-        [type]: deviceId ? { deviceId: { exact: deviceId } } : true
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      const newTracks = stream.getTracks();
-
-      if (!localMediaStream.current) {
-        localMediaStream.current = new MediaStream();
-      }
-
-      newTracks.forEach(track => {
-        localMediaStream.current?.addTrack(track);
-        track.enabled = mediaState[type];
-      });
-
-      Object.values(peerConnections.current).forEach(pc => {
-        const senders = pc.getSenders();
-        senders.forEach(sender => {
-          if (sender.track?.kind === type) {
-            const newTrack = newTracks.find(t => t.kind === type);
-            if (newTrack) sender.replaceTrack(newTrack).catch(e => {
-              console.error('Ошибка при замене трека:', e);
-            });
-          }
-        });
-      });
-
-      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-      if (localVideo && localMediaStream.current) {
-        localVideo.srcObject = new MediaStream(
-          localMediaStream.current.getTracks()
-        );
-        localVideo.play().catch(e => console.error('Local video play error:', e));
-      }
-
-      await enumerateDevices();
-      return true;
-    } catch (err) {
-      console.error(`Ошибка переключения устройства ${type}:`, err);
-      return false;
-    }
-  }, [enumerateDevices, mediaState]);
 
   // Установка соединения с пиром
   const setupPeerConnection = useCallback(async (
