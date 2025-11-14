@@ -32,6 +32,84 @@
   opacity: 0.3;
 }
 
+/* Отключенное видео */
+.videoDisabled {
+  background: #000 !important;
+}
+
+.videoDisabled::before {
+  content: "📹 Видео отключено";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #888;
+  font-size: 14px;
+  text-align: center;
+  z-index: 2;
+}
+
+/* Верхняя панель управления видео */
+.videoTopControls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+/* Кнопка полноэкранного режима */
+.fullscreenButton {
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.fullscreenButton:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+/* Кнопки управления участниками */
+.participantControls {
+  display: flex;
+  gap: 5px;
+}
+
+.participantControlButton {
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+}
+
+.participantControlButton:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.participantControlButtonActive {
+  background: rgba(220, 53, 69, 0.8);
+}
+
+.participantControlButtonActive:hover {
+  background: rgba(220, 53, 69, 1);
+}
+
 /* Метка пользователя (имя/статус) */
 .userLabel {
   position: absolute;
@@ -46,54 +124,7 @@
   align-items: center;
   gap: 5px;
   transition: background-color 0.2s ease;
-}
-
-/* Верхняя панель управления */
-.videoTopControls {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 10;
-}
-
-/* Стили для управления участниками */
-.participantControls {
-  display: flex;
-  gap: 5px;
-}
-
-.participantControlButton {
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
   backdrop-filter: blur(5px);
-  min-width: 40px;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.participantControlButton:hover {
-  background: rgba(0, 0, 0, 0.9);
-  transform: scale(1.1);
-}
-
-.participantControlButtonActive {
-  background: rgba(220, 53, 69, 0.8);
-}
-
-.participantControlButtonActive:hover {
-  background: rgba(220, 53, 69, 1);
 }
 
 /* Индикатор демонстрации экрана */
@@ -107,6 +138,14 @@
   0% { opacity: 1; }
   50% { opacity: 0.5; }
   100% { opacity: 1; }
+}
+
+/* Индикаторы отключенного контента */
+.videoDisabledIndicator,
+.audioDisabledIndicator {
+  margin-left: 5px;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 /* Окно выбора устройств */
@@ -215,21 +254,6 @@
   gap: 15px;
   justify-content: center;
   margin-bottom: 20px;
-}
-
-.cancelButton {
-  padding: 12px 24px;
-  background: #f44336;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background 0.3s ease;
-}
-
-.cancelButton:hover {
-  background: #d32f2f;
 }
 
 .deviceSelectionModal .joinButton {
@@ -348,7 +372,32 @@
   background: #f44336;
 }
 
-/* Контейнер чата с настройками прозрачности */
+/* Стили для кнопки копирования */
+.copyButton {
+  position: relative;
+  background: #555;
+  transition: background 0.2s ease;
+}
+
+.copyButton:hover {
+  background: #666;
+}
+
+.copyLabel {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Контейнер чата */
 .chatContainer {
   position: fixed;
   right: 20px;
@@ -387,7 +436,6 @@
   opacity: 0.85;
 }
 
-/* Эффект при наведении на кнопку закрытия */
 .chatCloseButton:hover {
   transform: scale(1.2);
 }
@@ -449,6 +497,22 @@
   opacity: 0.8;
 }
 
+/* Имя отправителя в чате */
+.messageSender {
+  font-weight: bold;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+  color: #555;
+  transition: color 0.2s ease;
+  opacity: 0.9;
+}
+
+/* Имя отправителя для локальных сообщений */
+.messageLocal .messageSender {
+  text-align: right;
+  color: #2ecc71;
+}
+
 /* Контейнер ввода сообщения */
 .chatInputContainer {
   padding: 10px;
@@ -469,7 +533,6 @@
   transition: color 0.2s ease;
 }
 
-/* Эффект при наведении на скрепку */
 .attachmentButton:hover {
   color: #333;
 }
@@ -487,7 +550,6 @@
   box-sizing: border-box;
 }
 
-/* Стиль поля ввода при фокусе */
 .chatInput:focus {
   border-color: #2196F3;
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
@@ -514,12 +576,10 @@
   font-size: 0.85rem;
 }
 
-/* Эффект при наведении на кнопку отправки */
 .chatSendButton:hover:not(:disabled) {
   background: rgba(69, 160, 73, 0.85);
 }
 
-/* Стиль для неактивной кнопки отправки */
 .chatSendButtonDisabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -562,7 +622,6 @@
   transition: transform 0.2s ease;
 }
 
-/* Эффект при наведении на кнопку закрытия настроек */
 .settingsCloseButton:hover {
   transform: scale(1.2);
 }
@@ -570,14 +629,6 @@
 /* Секция в настройках */
 .settingsSection {
   margin-bottom: 15px;
-}
-
-/* Подзаголовок в настройках */
-.settingsSubtitle {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 14px;
-  font-weight: 600;
 }
 
 /* Лейбл в настройках */
@@ -597,7 +648,6 @@
   transition: border-color 0.3s ease;
 }
 
-/* Стиль выпадающего списка при фокусе */
 .settingsSelect:focus {
   border-color: #2196F3;
   outline: none;
@@ -647,7 +697,6 @@
   transition: all 0.2s ease;
 }
 
-/* Эффект при наведении на кнопку повтора */
 .retryButton:hover {
   background-color: #45a049;
   transform: translateY(-2px);
@@ -657,49 +706,6 @@
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-/* Стили для кнопки копирования */
-.copyButton {
-  position: relative;
-  background: #555;
-  transition: background 0.2s ease;
-}
-
-/* Эффект при наведении на кнопку копирования */
-.copyButton:hover {
-  background: #666;
-}
-
-/* Лейбл подтверждения копирования */
-.copyLabel {
-  position: absolute;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  animation: fadeIn 0.3s ease;
-}
-
-/* Имя отправителя в чате */
-.messageSender {
-  font-weight: bold;
-  font-size: 0.8rem;
-  margin-bottom: 4px;
-  color: #555;
-  transition: color 0.2s ease;
-  opacity: 0.9;
-}
-
-/* Имя отправителя для локальных сообщений */
-.messageLocal .messageSender {
-  text-align: right;
-  color: #2ecc71;
 }
 
 /* Стили для полноэкранного режима */
@@ -719,37 +725,6 @@
 
 .videoWrapperHidden {
   display: none !important;
-}
-
-/* Кнопка увеличения/уменьшения */
-.fullscreenButton {
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(5px);
-  min-width: 40px;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fullscreenButton:hover {
-  background: rgba(0, 0, 0, 0.9);
-  transform: scale(1.1);
-}
-
-.videoWrapperFullscreen .fullscreenButton {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.videoWrapperFullscreen .fullscreenButton:hover {
-  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Кнопка выхода из полноэкранного режима */
@@ -774,34 +749,6 @@
   transform: scale(1.05);
 }
 
-/* Адаптация панели управления для полноэкранного режима */
-.videoWrapperFullscreen ~ .controls {
-  z-index: 1001;
-  bottom: 30px;
-}
-
-/* Адаптация чата для полноэкранного режима */
-.videoWrapperFullscreen ~ .chatContainer {
-  z-index: 1001;
-  right: 30px;
-  bottom: 100px;
-}
-
-/* Адаптация настроек для полноэкранного режима */
-.videoWrapperFullscreen ~ .settingsPanel {
-  z-index: 1001;
-  right: 30px;
-  top: 30px;
-}
-
-/* Улучшаем отображение метки пользователя в полноэкранном режиме */
-.videoWrapperFullscreen .userLabel {
-  background: rgba(0, 0, 0, 0.7);
-  padding: 10px 15px;
-  font-size: 16px;
-  backdrop-filter: blur(5px);
-}
-
 /* Анимация перехода в полноэкранный режим */
 .videoWrapper {
   transition: all 0.3s ease;
@@ -820,68 +767,6 @@
     transform: scale(1);
     opacity: 1;
   }
-}
-
-/* Индикаторы отключенного контента */
-.videoDisabled {
-  background: #000 !important;
-}
-
-.videoDisabled::before {
-  content: "📹 Видео отключено";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #888;
-  font-size: 14px;
-  text-align: center;
-}
-
-/* Настройки качества */
-.qualityPresets {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 15px;
-}
-
-.qualityPresetButton {
-  padding: 10px 12px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-.qualityPresetButton:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.qualityPresetButtonActive {
-  background: #007bff;
-  color: white;
-  border-color: #007bff;
-}
-
-.applyQualityButton {
-  width: 100%;
-  padding: 10px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s ease;
-}
-
-.applyQualityButton:hover {
-  background: #218838;
 }
 
 /* Для мобильных устройств */
@@ -921,22 +806,25 @@
     right: 5px;
   }
 
+  .fullscreenButton {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
   .participantControls {
-    gap: 3px;
+    gap: 2px;
   }
 
   .participantControlButton {
     padding: 4px 6px;
-    font-size: 12px;
-    min-width: 35px;
-    min-height: 28px;
+    font-size: 10px;
   }
 
-  .fullscreenButton {
-    padding: 4px 6px;
+  .userLabel {
+    bottom: 5px;
+    left: 5px;
+    padding: 3px 6px;
     font-size: 12px;
-    min-width: 35px;
-    min-height: 28px;
   }
 
   .deviceSelectionModal {
@@ -977,22 +865,10 @@
     font-size: 0.9em;
   }
 
-  .qualityPresets {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
-
-  .qualityPresetButton {
-    padding: 8px 10px;
-    font-size: 11px;
-  }
-
-  .videoWrapperFullscreen {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+  .settingsPanel {
+    right: 10px;
+    top: 10px;
+    min-width: calc(100% - 20px);
   }
 
   .exitFullscreenButton {

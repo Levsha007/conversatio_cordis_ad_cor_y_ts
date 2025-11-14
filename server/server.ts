@@ -31,16 +31,16 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ["websocket", "polling"],  // Поддерживаемые транспортные протоколы
-  pingTimeout: 60000,    // Таймаут соединения (мс)
-  pingInterval: 25000    // Интервал пинга (мс)
+  transports: ["websocket", "polling"],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-const PORT = process.env.PORT || 3001;  // Порт сервера
+const PORT = process.env.PORT || 3001;
 
 // Хранилище чатов по комнатам
 const roomChats = new Map<string, ChatMessage[]>();
-// Хранилище информации о пользователях (просто счетчик для номеров)
+// Хранилище информации о пользователях
 const roomUserCounters = new Map<string, number>();
 
 /**
@@ -69,7 +69,7 @@ function getUserNumber(roomID: string, socketId: string): number {
   
   const clients = Array.from(room);
   const userIndex = clients.indexOf(socketId);
-  return userIndex + 1; // +1 потому что индексы с 0, а номера с 1
+  return userIndex + 1;
 }
 
 /**
@@ -180,7 +180,7 @@ io.on('connection', (socket: Socket) => {
     const roomMessages = roomChats.get(roomID)!;
 
     if (roomMessages.length >= 100) {
-      roomMessages.shift(); // Ограничиваем историю до 100 сообщений
+      roomMessages.shift();
     }
 
     roomMessages.push(chatMessage);

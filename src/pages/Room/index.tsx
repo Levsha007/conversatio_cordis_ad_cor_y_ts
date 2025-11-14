@@ -1,6 +1,6 @@
 // Импорт необходимых зависимостей
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
@@ -34,13 +34,6 @@ interface DeviceSettings {
 }
 
 /**
- * Интерфейс для настроек качества
- */
-interface QualitySettings {
-  videoResolution: string;
-}
-
-/**
  * Кастомный хук для определения мобильного устройства
  * @returns {boolean} Флаг, является ли устройство мобильным
  */
@@ -64,26 +57,20 @@ const useTabSync = (roomId: string) => {
   useEffect(() => {
     if (!roomId) return;
 
-    // Создаем уникальный идентификатор для текущей вкладки
     const tabId = sessionStorage.getItem(`vc_tab_${roomId}`) || Date.now().toString();
     sessionStorage.setItem(`vc_tab_${roomId}`, tabId);
 
-    // Создаем канал для обмена сообщениями между вкладками
     const channel = new BroadcastChannel(`vc_${roomId}`);
     const handleMessage = (e: MessageEvent) => {
-      // Если другая вкладка с таким же roomId активна
       if (e.data.type === 'TAB_ACTIVE' && e.data.tabId !== tabId) {
-        // Закрываем соединение и перенаправляем на главную
         socket.emit(ACTIONS.LEAVE);
         navigate('/', { replace: true });
       }
     };
     channel.addEventListener('message', handleMessage);
 
-    // Сообщаем другим вкладкам о своем существовании
     channel.postMessage({ type: 'TAB_ACTIVE', tabId });
 
-    // Очистка при размонтировании компонента
     return () => {
       channel.removeEventListener('message', handleMessage);
       channel.close();
@@ -97,8 +84,7 @@ const useTabSync = (roomId: string) => {
  */
 const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings) => void;
-  onCancel: () => void;
-}> = ({ onJoin, onCancel }) => {
+}> = ({ onJoin }) => {
   const [settings, setSettings] = useState<DeviceSettings>({
     audio: false,
     video: false
@@ -119,7 +105,7 @@ const DeviceSelection: React.FC<{
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка устройств</h2>
-        <p>Выберите устройства для подключения к комнате:</p>
+        <p>Вы можете выбрать устройства сейчас или настроить их позже:</p>
         
         <div className={styles.deviceOptions}>
           <label className={styles.deviceOption}>
@@ -151,12 +137,6 @@ const DeviceSelection: React.FC<{
 
         <div className={styles.deviceSelectionButtons}>
           <button
-            onClick={onCancel}
-            className={styles.cancelButton}
-          >
-            Отмена
-          </button>
-          <button
             onClick={handleJoin}
             className={styles.joinButton}
           >
@@ -180,8 +160,6 @@ function calculateLayout(
   isMobile: boolean, 
   fullscreenParticipant: string | null = null
 ): LayoutItem[] {
-  // Если выбран полноэкранный режим, все элементы получают базовый размер
-  // но только выбранный участник будет виден благодаря CSS
   if (fullscreenParticipant) {
     return Array(clientsCount).fill({
       width: '100%',
@@ -217,18 +195,12 @@ function calculateLayout(
  * Основной компонент комнаты видеоконференции
  */
 const Room: React.FC = () => {
-  // Хуки навигации и параметров маршрута
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
-  const { search } = useLocation();
-
-  // Используем хук для синхронизации вкладок
   useTabSync(roomID || '');
-
-  // Определение типа устройства
   const isMobile = useIsMobile();
 
-  // Использование кастомного хука WebRTC с новыми функциями
+  // Использование кастомного хука WebRTC
   const {
     clients,
     provideMediaRef,
@@ -246,13 +218,9 @@ const Room: React.FC = () => {
     startScreenShare,
     stopScreenShare,
     initializeMedia,
-    // Новые функции
     participantSettings,
     toggleParticipantVideo,
-    toggleParticipantAudio,
-    qualitySettings,
-    updateQualitySettings,
-    applyQualitySettings
+    toggleParticipantAudio
   } = useWebRTC(roomID || '');
 
   // Состояния компонента
@@ -270,8 +238,6 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
-
-  // Реф для input[type="file"]
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Инициализация сообщений при монтировании
@@ -291,10 +257,14 @@ const Room: React.FC = () => {
   };
 
   /**
-   * Отмена выбора устройств
+   * Переключение полноэкранного режима для участника
    */
-  const handleCancelDeviceSelection = () => {
-    navigate('/');
+  const toggleFullscreen = (clientID: string) => {
+    if (fullscreenParticipant === clientID) {
+      setFullscreenParticipant(null);
+    } else {
+      setFullscreenParticipant(clientID);
+    }
   };
 
   /**
@@ -313,17 +283,6 @@ const Room: React.FC = () => {
     if (senderId === socket.id) return 'Вы';
     const number = userNumbers[senderId];
     return number ? `Участник ${number}` : `Участник`;
-  };
-
-  /**
-   * Переключение полноэкранного режима для участника
-   */
-  const toggleFullscreen = (clientID: string) => {
-    if (fullscreenParticipant === clientID) {
-      setFullscreenParticipant(null);
-    } else {
-      setFullscreenParticipant(clientID);
-    }
   };
 
   /**
@@ -386,25 +345,6 @@ const Room: React.FC = () => {
   };
 
   /**
-   * Функции для управления качеством
-   */
-  const handleQualityChange = (newSettings: Partial<QualitySettings>) => {
-    updateQualitySettings(newSettings);
-  };
-
-  const applyQuality = () => {
-    applyQualitySettings();
-  };
-
-  // Предустановки качества
-  const qualityPresets = {
-    '360p': { videoResolution: '360p' },
-    '480p': { videoResolution: '480p' },
-    '720p': { videoResolution: '720p' },
-    '1080p': { videoResolution: '1080p' }
-  };
-
-  /**
    * Отправка сообщения в чат
    */
   const handleSendMessage = () => {
@@ -419,7 +359,6 @@ const Room: React.FC = () => {
         sender: socket.id || 'unknown'
       };
       
-      // Используем addChatMessage из хука и обновляем локальное состояние
       if (addChatMessage) {
         addChatMessage(newMessage);
       }
@@ -435,7 +374,7 @@ const Room: React.FC = () => {
   };
 
   /**
-   * Обработчик выбора файла — отправляем как обычное сообщение
+   * Обработчик выбора файла
    */
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -450,13 +389,11 @@ const Room: React.FC = () => {
         sender: socket.id || 'unknown'
       };
       
-      // Используем addChatMessage из хука и обновляем локальное состояние
       if (addChatMessage) {
         addChatMessage(newMessage);
       }
       setMessages(prev => [...prev, newMessage]);
 
-      // Отправляем сообщение как обычное текстовое сообщение
       socket.emit(ACTIONS.CHAT_MESSAGE, {
         roomID,
         message: fileNameWithIcon,
@@ -465,7 +402,6 @@ const Room: React.FC = () => {
       });
     }
 
-    // Сбрасываем значение инпута, чтобы можно было выбрать тот же файл снова
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -505,7 +441,6 @@ const Room: React.FC = () => {
       timestamp: string;
       userNumber?: number;
     }) => {
-      // Обновляем номер пользователя если пришло
       if (msg.userNumber && msg.sender !== socket.id) {
         setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
       }
@@ -534,7 +469,6 @@ const Room: React.FC = () => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         
-        // Обновляем номер пользователя если пришло
         if (msg.userNumber && msg.sender !== socket.id) {
           setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
         }
@@ -566,7 +500,6 @@ const Room: React.FC = () => {
       
       setMessages(formattedMessages);
       
-      // Обновляем номера пользователей из истории
       historyMessages.forEach(msg => {
         if (msg.userNumber && msg.sender !== socket.id) {
           setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber }));
@@ -611,16 +544,13 @@ const Room: React.FC = () => {
     <div className={styles.roomContainer}>
       {/* Окно выбора устройств */}
       {showDeviceSelection && (
-        <DeviceSelection
-          onJoin={handleDeviceSelection}
-          onCancel={handleCancelDeviceSelection}
-        />
+        <DeviceSelection onJoin={handleDeviceSelection} />
       )}
 
       {/* Оверлей с ошибками */}
       {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) || 
-        (clients.length === 0 && devicesInitialized) || 
-        !webRTCStatus.isSupported ? (
+       (clients.length === 0 && devicesInitialized) || 
+       !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
             <>
@@ -675,6 +605,15 @@ const Room: React.FC = () => {
           
           {/* Верхняя панель управления */}
           <div className={styles.videoTopControls}>
+            {/* Кнопка полноэкранного режима */}
+            <button 
+              className={styles.fullscreenButton}
+              onClick={() => toggleFullscreen(clientID)}
+              title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
+            >
+              {fullscreenParticipant === clientID ? '⤢' : '⤡'}
+            </button>
+
             {/* Кнопки управления для других участников */}
             {clientID !== LOCAL_VIDEO && (
               <div className={styles.participantControls}>
@@ -685,7 +624,7 @@ const Room: React.FC = () => {
                   onClick={() => toggleParticipantVideo(clientID)}
                   title={participantSettings[clientID]?.videoEnabled ? "Скрыть видео" : "Показать видео"}
                 >
-                  {participantSettings[clientID]?.videoEnabled ? '📹' : '📹❌'}
+                  📹
                 </button>
                 <button
                   className={`${styles.participantControlButton} ${
@@ -694,33 +633,33 @@ const Room: React.FC = () => {
                   onClick={() => toggleParticipantAudio(clientID)}
                   title={participantSettings[clientID]?.audioEnabled ? "Отключить звук" : "Включить звук"}
                 >
-                  {participantSettings[clientID]?.audioEnabled ? '🎤' : '🎤❌'}
+                  🎤
                 </button>
               </div>
             )}
-
-            {/* Кнопка увеличения/уменьшения */}
-            <button 
-              className={styles.fullscreenButton}
-              onClick={() => toggleFullscreen(clientID)}
-              title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
-            >
-              {fullscreenParticipant === clientID ? '⤢' : '⤡'}
-            </button>
           </div>
 
-          {/* Метка пользователя */}
+          {/* Нижняя метка пользователя */}
           <div className={styles.userLabel}>
             {getUserDisplayName(clientID)}
+            
             {/* Индикаторы состояния медиа */}
             {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
             {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
             {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
+            
+            {/* Индикаторы отключенного контента */}
+            {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
+              <span className={styles.videoDisabledIndicator}>📹❌</span>
+            )}
+            {!participantSettings[clientID]?.audioEnabled && clientID !== LOCAL_VIDEO && (
+              <span className={styles.audioDisabledIndicator}>🎤❌</span>
+            )}
           </div>
         </div>
       ))}
 
-      {/* Кнопка выхода из полноэкранного режима (показывается только в полноэкранном режиме) */}
+      {/* Кнопка выхода из полноэкранного режима */}
       {fullscreenParticipant && (
         <button 
           className={styles.exitFullscreenButton}
@@ -734,32 +673,28 @@ const Room: React.FC = () => {
       {/* Панель управления */}
       <div className={styles.controls}>
         {/* Кнопка микрофона */}
-        {mediaState.audio !== undefined && (
-          <button
-            onClick={() => toggleMedia('audio')}
-            className={`${styles.controlButton} ${
-              mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
-            }`}
-            title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-            aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-          >
-            {mediaState.audio ? '🎤' : '🔇'}
-          </button>
-        )}
+        <button
+          onClick={() => toggleMedia('audio')}
+          className={`${styles.controlButton} ${
+            mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
+          }`}
+          title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+          aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+        >
+          {mediaState.audio ? '🎤' : '🔇'}
+        </button>
 
         {/* Кнопка камеры */}
-        {mediaState.video !== undefined && (
-          <button
-            onClick={() => toggleMedia('video')}
-            className={`${styles.controlButton} ${
-              mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
-            }`}
-            title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-            aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-          >
-            {mediaState.video ? '📹' : '📷'}
-          </button>
-        )}
+        <button
+          onClick={() => toggleMedia('video')}
+          className={`${styles.controlButton} ${
+            mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
+          }`}
+          title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+          aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+        >
+          {mediaState.video ? '📹' : '📷'}
+        </button>
 
         {/* Кнопка демонстрации экрана */}
         {!mediaState.screen ? (
@@ -868,7 +803,6 @@ const Room: React.FC = () => {
 
           {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
-            {/* Кнопка скрепки 📎 */}
             <button
               className={styles.attachmentButton}
               onClick={() => fileInputRef.current?.click()}
@@ -877,7 +811,6 @@ const Room: React.FC = () => {
               📎
             </button>
 
-            {/* Поле ввода текста */}
             <input
               type="text"
               value={messageInput}
@@ -888,7 +821,6 @@ const Room: React.FC = () => {
               aria-label="Введите сообщение"
             />
 
-            {/* Скрытое поле для файла */}
             <input
               type="file"
               ref={fileInputRef}
@@ -897,7 +829,6 @@ const Room: React.FC = () => {
               aria-hidden="true"
             />
 
-            {/* Кнопка отправки */}
             <button
               onClick={handleSendMessage}
               disabled={!messageInput.trim()}
@@ -923,53 +854,6 @@ const Room: React.FC = () => {
               aria-label="Закрыть настройки"
             >
               ×
-            </button>
-          </div>
-
-          {/* Секция качества соединения */}
-          <div className={styles.settingsSection}>
-            <h4 className={styles.settingsSubtitle}>Качество видео</h4>
-            
-            <div className={styles.qualityPresets}>
-              <button
-                className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoResolution === '360p' ? styles.qualityPresetButtonActive : ''
-                }`}
-                onClick={() => handleQualityChange(qualityPresets['360p'])}
-              >
-                360p
-              </button>
-              <button
-                className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoResolution === '480p' ? styles.qualityPresetButtonActive : ''
-                }`}
-                onClick={() => handleQualityChange(qualityPresets['480p'])}
-              >
-                480p
-              </button>
-              <button
-                className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoResolution === '720p' ? styles.qualityPresetButtonActive : ''
-                }`}
-                onClick={() => handleQualityChange(qualityPresets['720p'])}
-              >
-                720p
-              </button>
-              <button
-                className={`${styles.qualityPresetButton} ${
-                  qualitySettings.videoResolution === '1080p' ? styles.qualityPresetButtonActive : ''
-                }`}
-                onClick={() => handleQualityChange(qualityPresets['1080p'])}
-              >
-                1080p
-              </button>
-            </div>
-
-            <button
-              onClick={applyQuality}
-              className={styles.applyQualityButton}
-            >
-              Применить настройки качества
             </button>
           </div>
 
