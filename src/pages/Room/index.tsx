@@ -35,7 +35,6 @@ interface DeviceSettings {
 
 /**
  * Кастомный хук для определения мобильного устройства
- * @returns {boolean} Флаг, является ли устройство мобильным
  */
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
@@ -49,8 +48,7 @@ const useIsMobile = (): boolean => {
 };
 
 /**
- * Кастомный хук для синхронизации вкладок и предотвращения дубликатов
- * @param roomId - ID комнаты
+ * Кастомный хук для синхронизации вкладок
  */
 const useTabSync = (roomId: string) => {
   const navigate = useNavigate();
@@ -105,7 +103,7 @@ const DeviceSelection: React.FC<{
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка устройств</h2>
-        <p>Вы можете выбрать устройства сейчас или настроить их позже:</p>
+        <p>Выберите устройства для начала видеоконференции:</p>
         
         <div className={styles.deviceOptions}>
           <label className={styles.deviceOption}>
@@ -153,7 +151,7 @@ const DeviceSelection: React.FC<{
 };
 
 /**
- * Функция расчета расположения видео элементов с поддержкой полноэкранного режима
+ * Функция расчета расположения видео элементов
  */
 function calculateLayout(
   clientsCount: number = 1, 
