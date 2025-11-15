@@ -143,7 +143,7 @@ const DeviceSelection: React.FC<{
         </div>
 
         <div className={styles.deviceSelectionHint}>
-          <p>💡 Вы можете изменить настройки устройств в любой момент во время сессии</p>
+          <p>💡 Выберите устройства, которые собираетесь использовать. Если решите изменить выбор — перезагрузите страницу.</p>
         </div>
       </div>
     </div>
@@ -600,6 +600,21 @@ const Room: React.FC = () => {
               !participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''
             }`}
           />
+          
+          {/* Плейсхолдер для участников без видео */}
+          {!peerMediaElements.current[clientID]?.srcObject && clientID !== LOCAL_VIDEO && (
+            <div className={styles.participantPlaceholder}>
+              <div className={styles.participantAvatar}>
+                {getUserDisplayName(clientID).charAt(0)}
+              </div>
+              <div className={styles.participantName}>
+                {getUserDisplayName(clientID)}
+              </div>
+              <div className={styles.participantStatus}>
+                📹 Нет видео
+              </div>
+            </div>
+          )}
           
           {/* Верхняя панель управления */}
           <div className={styles.videoTopControls}>
