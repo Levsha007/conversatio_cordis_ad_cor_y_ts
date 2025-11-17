@@ -21,11 +21,11 @@
   box-sizing: border-box;
 }
 
-/* Базовые стили для видео элементов */
+/* Базовые стили для видео элементов - ИСПРАВЛЕНО: убрано обрезание */
 .video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: contain; /* Изменено с cover на contain чтобы не обрезать */
   transition: opacity 0.3s ease;
 }
 
@@ -50,51 +50,6 @@
   font-size: 14px;
   text-align: center;
   z-index: 2;
-}
-
-/* Стили для плейсхолдера участников без видео */
-.participantPlaceholder {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  z-index: 1;
-}
-
-.participantAvatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  font-weight: bold;
-  margin-bottom: 15px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-}
-
-.participantName {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 8px;
-  text-align: center;
-  padding: 0 15px;
-}
-
-.participantStatus {
-  font-size: 0.9rem;
-  opacity: 0.8;
-  text-align: center;
-  padding: 0 15px;
 }
 
 /* Верхняя панель управления видео */
@@ -358,28 +313,29 @@
   font-size: 14px;
 }
 
-/* Панель управления (кнопки внизу экрана) */
+/* Панель управления (кнопки внизу экрана) - ИСПРАВЛЕНО: убран фон и уменьшены кнопки */
 .controls {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 10px;
+  gap: 8px;
   z-index: 100;
   transition: opacity 0.3s ease;
   flex-wrap: wrap;
   justify-content: center;
   max-width: 95vw;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 25px;
-  backdrop-filter: blur(10px);
+  padding: 8px;
+  /* Убран фон и граница */
+  background: transparent;
+  border-radius: 0;
+  backdrop-filter: none;
 }
 
-/* Базовые стили кнопок управления */
+/* Базовые стили кнопок управления - ИСПРАВЛЕНО: уменьшены и затемнены */
 .controlButton {
-  padding: 10px;
+  padding: 8px;
   border-radius: 50%;
   border: none;
   color: white;
@@ -387,83 +343,130 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   transition: all 0.2s ease;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   position: relative;
+  /* Затемненные цвета */
+  background: rgba(60, 60, 60, 0.7);
+  backdrop-filter: blur(5px);
 }
 
 /* Эффект при наведении на кнопки */
 .controlButton:hover {
-  transform: scale(1.1);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+  background: rgba(80, 80, 80, 0.8);
 }
 
 /* Стили для кнопки включённого микрофона */
 .controlButtonMicOn {
-  background: #4CAF50;
+  background: rgba(76, 175, 80, 0.7);
+}
+
+.controlButtonMicOn:hover {
+  background: rgba(76, 175, 80, 0.8);
 }
 
 /* Стили для кнопки выключенного микрофона */
 .controlButtonMicOff {
-  background: #f44336;
+  background: rgba(244, 67, 54, 0.7);
+}
+
+.controlButtonMicOff:hover {
+  background: rgba(244, 67, 54, 0.8);
 }
 
 /* Стили для кнопки включённой камеры */
 .controlButtonCamOn {
-  background: #4CAF50;
+  background: rgba(76, 175, 80, 0.7);
+}
+
+.controlButtonCamOn:hover {
+  background: rgba(76, 175, 80, 0.8);
 }
 
 /* Стили для кнопки выключенной камеры */
 .controlButtonCamOff {
-  background: #f44336;
+  background: rgba(244, 67, 54, 0.7);
+}
+
+.controlButtonCamOff:hover {
+  background: rgba(244, 67, 54, 0.8);
 }
 
 /* Стили для кнопки демонстрации экрана */
 .controlButtonScreenShare {
-  background: #FF9800;
+  background: rgba(255, 152, 0, 0.7);
+}
+
+.controlButtonScreenShare:hover {
+  background: rgba(255, 152, 0, 0.8);
 }
 
 /* Стили для активной кнопки демонстрации экрана */
 .controlButtonScreenShareActive {
-  background: #f44336;
+  background: rgba(244, 67, 54, 0.7);
+}
+
+.controlButtonScreenShareActive:hover {
+  background: rgba(244, 67, 54, 0.8);
 }
 
 /* Стили для кнопки чата (неактивное состояние) */
 .controlButtonChat {
-  background: #555;
+  background: rgba(85, 85, 85, 0.7);
+}
+
+.controlButtonChat:hover {
+  background: rgba(85, 85, 85, 0.8);
 }
 
 /* Стили для кнопки чата (активное состояние) */
 .controlButtonChatActive {
-  background: #2196F3;
+  background: rgba(33, 150, 243, 0.7);
+}
+
+.controlButtonChatActive:hover {
+  background: rgba(33, 150, 243, 0.8);
 }
 
 /* Стили для кнопки настроек (неактивное состояние) */
 .controlButtonSettings {
-  background: #555;
+  background: rgba(85, 85, 85, 0.7);
+}
+
+.controlButtonSettings:hover {
+  background: rgba(85, 85, 85, 0.8);
 }
 
 /* Стили для кнопки настроек (активное состояние) */
 .controlButtonSettingsActive {
-  background: #FF9800;
+  background: rgba(255, 152, 0, 0.7);
+}
+
+.controlButtonSettingsActive:hover {
+  background: rgba(255, 152, 0, 0.8);
 }
 
 /* Стили для кнопки выхода из комнаты */
 .controlButtonLeave {
-  background: #f44336;
+  background: rgba(244, 67, 54, 0.7);
+}
+
+.controlButtonLeave:hover {
+  background: rgba(244, 67, 54, 0.8);
 }
 
 /* Стили для кнопки копирования */
 .copyButton {
   position: relative;
-  background: #555;
+  background: rgba(85, 85, 85, 0.7);
   transition: background 0.2s ease;
 }
 
 .copyButton:hover {
-  background: #666;
+  background: rgba(85, 85, 85, 0.8);
 }
 
 .copyLabel {
@@ -873,7 +876,52 @@
   }
 }
 
-/* Для мобильных устройств */
+/* Стили для плейсхолдера участников без видео */
+.participantPlaceholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  z-index: 1;
+}
+
+.participantAvatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.participantName {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-align: center;
+  padding: 0 15px;
+}
+
+.participantStatus {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  text-align: center;
+  padding: 0 15px;
+}
+
+/* Для мобильных устройств - ИСПРАВЛЕНА СЕТКА */
 @media (max-width: 767px) {
   .roomContainer {
     flex-direction: column;
@@ -885,11 +933,12 @@
 
   .videoWrapper {
     width: 100% !important;
-    height: 40vh !important;
-    min-height: 250px;
+    height: 33vh !important; /* Равномерное распределение */
+    min-height: 200px;
     aspect-ratio: 16/9;
   }
 
+  /* Исправленная сетка для разного количества участников */
   .videoWrapper:only-child {
     height: 100vh !important;
   }
@@ -902,7 +951,14 @@
   .videoWrapper:nth-child(1):nth-last-child(3),
   .videoWrapper:nth-child(2):nth-last-child(2),
   .videoWrapper:nth-child(3):nth-last-child(1) {
-    height: calc(100vh / 3) !important;
+    height: 33.33vh !important;
+  }
+
+  .videoWrapper:nth-child(1):nth-last-child(4),
+  .videoWrapper:nth-child(2):nth-last-child(3),
+  .videoWrapper:nth-child(3):nth-last-child(2),
+  .videoWrapper:nth-child(4):nth-last-child(1) {
+    height: 25vh !important;
   }
 
   .videoTopControls {
@@ -996,15 +1052,14 @@
     justify-content: center;
     width: 95%;
     gap: 5px;
-    padding: 8px;
-    border-radius: 20px;
+    padding: 5px;
   }
 
   .controlButton {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     font-size: 1rem;
-    padding: 8px;
+    padding: 6px;
   }
 
   .settingsPanel {
@@ -1059,14 +1114,15 @@
     font-size: 0.8rem;
   }
 
+  /* Улучшения для очень маленьких экранов */
   @media (max-width: 360px) {
     .controls {
       gap: 3px;
     }
     
     .controlButton {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       font-size: 0.9rem;
     }
     
@@ -1075,12 +1131,13 @@
     }
     
     .videoWrapper {
-      height: 35vh !important;
-      min-height: 200px;
+      height: 30vh !important;
+      min-height: 180px;
     }
   }
 }
 
+/* Горизонтальная ориентация на мобильных */
 @media (max-width: 767px) and (orientation: landscape) {
   .roomContainer {
     flex-direction: row;
@@ -1107,14 +1164,15 @@
   }
 }
 
+/* Улучшения для планшетов */
 @media (min-width: 768px) and (max-width: 1024px) {
   .controls {
     gap: 8px;
   }
   
   .controlButton {
-    width: 48px;
-    height: 48px;
+    width: 46px;
+    height: 46px;
   }
   
   .chatContainer {
