@@ -578,7 +578,7 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
-      {/* Видео потоки участников - ВСЕГДА отображаем всех клиентов */}
+      {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
           key={`${clientID}-${retryCount}`} 
@@ -602,10 +602,7 @@ const Room: React.FC = () => {
           />
           
           {/* Плейсхолдер для участников без видео */}
-          {(!peerMediaElements.current[clientID]?.srcObject || 
-            (peerMediaElements.current[clientID]?.srcObject instanceof MediaStream && 
-            peerMediaElements.current[clientID]?.srcObject.getTracks().length === 0)) && 
-            clientID !== LOCAL_VIDEO && (
+          {!peerMediaElements.current[clientID]?.srcObject && clientID !== LOCAL_VIDEO && (
             <div className={styles.participantPlaceholder}>
               <div className={styles.participantAvatar}>
                 {getUserDisplayName(clientID).charAt(0)}

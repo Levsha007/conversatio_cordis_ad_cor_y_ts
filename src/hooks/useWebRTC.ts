@@ -63,6 +63,13 @@ function checkWebRTCAvailability(): WebRTCStatus {
   const errors: string[] = [];
   if (!navigator.mediaDevices) errors.push('mediaDevices недоступен');
   if (!window.RTCPeerConnection) errors.push('RTCPeerConnection недоступен');
+  
+  // Проверка для Apple устройств
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  if (isSafari && !window.RTCRtpSender) {
+    errors.push('Safari требует дополнительных разрешений для WebRTC');
+  }
+  
   return {
     isSupported: errors.length === 0,
     errors
@@ -94,16 +101,21 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const peerMediaElements = useRef<Record<string, HTMLVideoElement | null>>({});
   const chatMessages = useRef<ChatMessage[]>([]);
   
-  // ICE серверы с поддержкой Apple
+  // ICE серверы с улучшенной поддержкой Apple
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    // Для Apple устройств
-    { urls: 'stun:stun.iphone.com:3478' },
-    { urls: 'stun:stun.mac.com:3478' }
+    // Дополнительные STUN для Apple
+    { urls: 'stun:stun.voipbuster.com:3478' },
+    { urls: 'stun:stun.voipstunt.com:3478' },
+    {
+      urls: 'turn:numb.viagenie.ca:3478',
+      username: 'webrtc@live.com',
+      credential: 'muazkh'
+    }
   ]);
 
   const isInitialized = useRef(false);
@@ -125,10 +137,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       deviceId: selectedAudioDevice ? { exact: selectedAudioDevice } : undefined
     } : false,
     video: constraints.video ? {
-      width: { ideal: 1280, max: 1920 },
-      height: { ideal: 720, max: 1080 },
-      frameRate: { ideal: 30, max: 60 },
-      aspectRatio: { ideal: 1.7777777778 }, // 16:9
+      width: { ideal: 1280, min: 640 },
+      height: { ideal: 720, min: 480 },
+      frameRate: { ideal: 30, min: 20 },
+      aspectRatio: { ideal: 16/9 },
       deviceId: selectedVideoDevice ? { exact: selectedVideoDevice } : undefined
     } : false
   }), [selectedAudioDevice, selectedVideoDevice]);
@@ -205,7 +217,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
         if (localVideo) {
           // Показываем демонстрацию экрана если она активна, иначе обычный поток
-          const activeStream = mediaState.screen ? screenShareStream.current : stream;
+          const activeStream = mediaState.screen && screenShareStream.current ? 
+            screenShareStream.current : stream;
           localVideo.srcObject = activeStream;
           localVideo.volume = 0;
           if (activeStream) {
@@ -230,7 +243,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID, mediaState.screen]);
 
-  // Демонстрация экрана - УПРОЩЕННАЯ И ИСПРАВЛЕННАЯ ВЕРСИЯ
+  // Демонстрация экрана - РАБОЧАЯ ВЕРСИЯ
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
       console.log('Starting screen share...');
@@ -241,64 +254,106 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         screenShareStream.current = null;
       }
 
-      // Получаем поток демонстрации экрана ТОЛЬКО с видео
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      // Получаем поток демонстрации экрана
+      const screenConstraints: MediaStreamConstraints = {
         video: {
-          cursor: 'always',
-          displaySurface: 'window'
+          cursor: 'always'
         } as any,
-        audio: false // Отключаем аудио с экрана чтобы не конфликтовало с микрофоном
-      });
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 48000,
+          channelCount: 2
+        }
+      };
 
+      const stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
       console.log('Screen share stream obtained:', stream.getTracks());
 
       screenShareStream.current = stream;
       setMediaState(prev => ({ ...prev, screen: true }));
 
       const screenVideoTrack = stream.getVideoTracks()[0];
+      const screenAudioTrack = stream.getAudioTracks()[0];
 
       // Обновляем локальное видео для показа демонстрации экрана
       const localVideo = peerMediaElements.current[LOCAL_VIDEO];
       if (localVideo) {
-        // Создаем комбинированный поток: видео с экрана + аудио с микрофона
+        // Создаем комбинированный поток для локального отображения
         const combinedStream = new MediaStream();
         combinedStream.addTrack(screenVideoTrack);
-        
-        // Добавляем аудио трек из локального потока если он есть
-        if (localMediaStream.current) {
-          const audioTracks = localMediaStream.current.getAudioTracks();
-          audioTracks.forEach(track => combinedStream.addTrack(track));
+        if (screenAudioTrack) {
+          combinedStream.addTrack(screenAudioTrack);
         }
-        
         localVideo.srcObject = combinedStream;
         localVideo.play().catch(e => console.error('Screen share video play error:', e));
       }
 
-      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем ВСЕ существующие peer соединения
+      // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обновляем все существующие peer соединения
       const updatePromises = Object.entries(peerConnections.current).map(async ([peerID, pc]) => {
         try {
-          console.log(`Updating peer ${peerID} for screen share`);
-          
           const senders = pc.getSenders();
-          let videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          console.log(`Updating peer ${peerID} with screen share, ${senders.length} senders`);
+
+          // Создаем новый поток для демонстрации экрана
+          const screenStream = new MediaStream();
+          screenStream.addTrack(screenVideoTrack);
           
-          if (videoSender) {
-            // Заменяем существующий видео трек на демонстрацию экрана
-            await videoSender.replaceTrack(screenVideoTrack);
-            console.log(`Replaced video track for peer ${peerID}`);
-          } else {
-            // Добавляем новый видео трек
-            pc.addTrack(screenVideoTrack, stream);
-            console.log(`Added new video track for peer ${peerID}`);
+          // Если есть аудио с экрана, добавляем его
+          if (screenAudioTrack) {
+            screenStream.addTrack(screenAudioTrack);
           }
 
-          // Аудио оставляем как есть (микрофон продолжает работать)
-          // Не трогаем аудио сендеры!
+          // Сохраняем оригинальные аудио треки из локального потока
+          const originalAudioTracks = localMediaStream.current?.getAudioTracks() || [];
 
-          // Перезапускаем переговоры
-          console.log(`Restarting negotiation for peer ${peerID}`);
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
+          // Заменяем ВСЕ существующие треки
+          for (const sender of senders) {
+            if (sender.track) {
+              if (sender.track.kind === 'video') {
+                console.log(`Replacing video track for peer ${peerID}`);
+                await sender.replaceTrack(screenVideoTrack);
+              } else if (sender.track.kind === 'audio') {
+                // Для аудио: если есть аудио с экрана, используем его, иначе оставляем микрофон
+                if (screenAudioTrack) {
+                  console.log(`Replacing audio track with screen audio for peer ${peerID}`);
+                  await sender.replaceTrack(screenAudioTrack);
+                }
+                // Если нет аудио с экрана, оставляем оригинальный микрофон
+              }
+            }
+          }
+
+          // Если не было отправителя для видео, добавляем новый
+          const hasVideoSender = senders.some(s => s.track?.kind === 'video');
+          if (!hasVideoSender) {
+            console.log(`Adding new video track for peer ${peerID}`);
+            pc.addTrack(screenVideoTrack, screenStream);
+          }
+
+          // Если не было отправителя для аудио и есть аудио с экрана, добавляем новый
+          const hasAudioSender = senders.some(s => s.track?.kind === 'audio');
+          if (!hasAudioSender && screenAudioTrack) {
+            console.log(`Adding new audio track for peer ${peerID}`);
+            pc.addTrack(screenAudioTrack, screenStream);
+          }
+
+          // Создаем новый offer для принудительного обновления соединения
+          console.log(`Creating new offer for peer ${peerID}`);
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
+          
+          // Улучшенная обработка для Apple устройств
+          const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+          if (isSafari) {
+            // Для Safari используем более совместимые настройки
+            await pc.setLocalDescription(offer);
+          } else {
+            await pc.setLocalDescription(offer);
+          }
           
           socket.emit(ACTIONS.RELAY_SDP, {
             peerID,
@@ -319,6 +374,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         console.log('Screen share ended by user');
         stopScreenShare();
       });
+
+      // Обработчик для аудио трека
+      if (screenAudioTrack) {
+        screenAudioTrack.addEventListener('ended', () => {
+          console.log('Screen share audio ended');
+        });
+      }
 
     } catch (err) {
       console.error('Ошибка демонстрации экрана:', err);
@@ -345,17 +407,35 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         
         if (originalStream) {
           const originalVideoTrack = originalStream.getVideoTracks()[0];
+          const originalAudioTrack = originalStream.getAudioTracks()[0];
+
+          console.log(`Restoring original tracks for peer ${peerID}`);
+
+          // Восстанавливаем оригинальное видео
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          
           if (videoSender && originalVideoTrack) {
             await videoSender.replaceTrack(originalVideoTrack);
-            console.log(`Restored original video track for peer ${peerID}`);
+          }
+
+          // Восстанавливаем оригинальное аудио
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+          if (audioSender && originalAudioTrack) {
+            await audioSender.replaceTrack(originalAudioTrack);
           }
         }
 
-        // Перезапускаем переговоры
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        // Создаем новый offer для обновления соединения
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
+        
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        if (isSafari) {
+          await pc.setLocalDescription(offer);
+        } else {
+          await pc.setLocalDescription(offer);
+        }
         
         socket.emit(ACTIONS.RELAY_SDP, {
           peerID,
@@ -371,9 +451,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
     // Восстанавливаем локальное видео
     const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-    if (localVideo && originalStream) {
-      localVideo.srcObject = originalStream;
-      localVideo.play().catch(e => console.error('Local video play error after screen share:', e));
+    if (localVideo) {
+      if (originalStream) {
+        localVideo.srcObject = originalStream;
+        localVideo.play().catch(e => console.error('Local video play error after screen share:', e));
+      } else {
+        localVideo.srcObject = null;
+      }
     }
   }, []);
 
@@ -392,6 +476,55 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         setSelectedVideoDevice(deviceId);
       }
 
+      // Если идет демонстрация экрана, обновляем только локальный поток
+      if (mediaState.screen) {
+        console.log('Screen share is active, updating local stream only');
+        
+        const oldTracks = localMediaStream.current?.getTracks()
+          .filter(track => track.kind === type) || [];
+        
+        oldTracks.forEach(track => {
+          track.stop();
+          localMediaStream.current?.removeTrack(track);
+        });
+
+        const constraints: MediaStreamConstraints = {
+          [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+        };
+
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.error(`Failed to get user media for ${type}:`, err);
+          stream = new MediaStream();
+        }
+
+        const newTracks = stream.getTracks();
+
+        if (!localMediaStream.current) {
+          localMediaStream.current = new MediaStream();
+        }
+
+        newTracks.forEach(track => {
+          localMediaStream.current?.addTrack(track);
+          track.enabled = mediaState[type];
+        });
+
+        // Обновляем локальное видео только если не идет демонстрация экрана
+        if (type === 'video' && !mediaState.screen) {
+          const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+          if (localVideo && localMediaStream.current) {
+            localVideo.srcObject = localMediaStream.current;
+            localVideo.play().catch(e => console.error('Local video play error:', e));
+          }
+        }
+
+        await enumerateDevices();
+        return true;
+      }
+
+      // Если демонстрация экрана не активна, обновляем как обычно
       const oldTracks = localMediaStream.current?.getTracks()
         .filter(track => track.kind === type) || [];
       
@@ -409,7 +542,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err) {
         console.error(`Failed to get user media for ${type}:`, err);
-        // Создаем пустой поток если устройство недоступно
         stream = new MediaStream();
       }
 
@@ -445,13 +577,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         })
       );
 
-      // Обновляем локальное видео (если не идет демонстрация экрана)
-      if (!mediaState.screen) {
-        const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-        if (localVideo && localMediaStream.current) {
-          localVideo.srcObject = localMediaStream.current;
-          localVideo.play().catch(e => console.error('Local video play error:', e));
-        }
+      // Обновляем локальное видео
+      const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+      if (localVideo && localMediaStream.current) {
+        localVideo.srcObject = localMediaStream.current;
+        localVideo.play().catch(e => console.error('Local video play error:', e));
       }
 
       await enumerateDevices();
@@ -510,7 +640,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     });
   }, [mediaState.screen]);
 
-  // Установка соединения с пиром - ОСНОВНАЯ ФУНКЦИЯ
+  // Установка соединения с пиром - УЛУЧШЕННАЯ ВЕРСИЯ
   const setupPeerConnection = useCallback(async (
     peerID: string, 
     createOffer: boolean
@@ -522,20 +652,28 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
     console.log(`Setting up peer connection for ${peerID}, createOffer: ${createOffer}`);
 
-    // Конфигурация для лучшей совместимости с Apple
-    // Убрать свойство sdpSemantics из конфигурации RTCPeerConnection
-    const pc = new RTCPeerConnection({ 
+    // Улучшенная конфигурация для Apple устройств
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const pcConfig: RTCConfiguration = {
       iceServers: iceServers.current,
-      iceCandidatePoolSize: 10,
+      iceCandidatePoolSize: isSafari ? 5 : 10,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require'
-      // Убрать sdpSemantics: 'unified-plan' - это свойство устарело или не поддерживается в TypeScript
-    });
+    };
 
+    // Для Safari добавляем совместимые настройки
+    if (isSafari) {
+      // Используем более совместимую конфигурацию для Safari
+      pcConfig.iceTransportPolicy = 'all';
+    }
+
+    const pc = new RTCPeerConnection(pcConfig);
     peerConnections.current[peerID] = pc;
 
     // Добавляем треки из активного потока
-    const activeStream = mediaState.screen ? screenShareStream.current : localMediaStream.current;
+    const activeStream = mediaState.screen && screenShareStream.current ? 
+      screenShareStream.current : localMediaStream.current;
+      
     if (activeStream && activeStream.getTracks().length > 0) {
       console.log(`Adding ${activeStream.getTracks().length} tracks from active stream to peer ${peerID}`);
       activeStream.getTracks().forEach(track => {
@@ -550,8 +688,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       });
     } else {
       console.log(`No active tracks available for peer ${peerID}`);
-      // Добавляем пустые треки чтобы соединение установилось
-      addNewClient(peerID);
     }
 
     // Обработка ICE кандидатов
@@ -567,19 +703,19 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     // Обработка ICE соединения
     pc.oniceconnectionstatechange = () => {
       console.log(`ICE connection state for ${peerID}:`, pc.iceConnectionState);
-      if (pc.iceConnectionState === 'failed') {
-        console.log('ICE connection failed, restarting ICE...');
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.log(`ICE connection ${pc.iceConnectionState} for ${peerID}, restarting ICE...`);
         pc.restartIce();
       }
     };
 
-    // Обработка сигнального состояния
-    pc.onsignalingstatechange = () => {
-      console.log(`Signaling state for ${peerID}:`, pc.signalingState);
+    // Обработка состояния соединения
+    pc.onconnectionstatechange = () => {
+      console.log(`Connection state for ${peerID}:`, pc.connectionState);
     };
 
     // Получение удаленного медиа потока
-    pc.ontrack = ({ streams: [remoteStream], track }) => {
+    pc.ontrack = ({ streams: [remoteStream] }) => {
       if (!remoteStream) {
         console.log('No remote stream received for peer:', peerID);
         // Добавляем клиента даже без потока для отображения участника
@@ -592,16 +728,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         return;
       }
       
-      console.log('Received remote stream from:', peerID, 'with track:', track.kind);
+      console.log('Received remote stream from:', peerID, remoteStream.getTracks());
       addNewClient(peerID, () => {
         const element = peerMediaElements.current[peerID];
         if (element) {
-          // Для Apple устройств - особенная обработка
-          if (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
-            element.srcObject = remoteStream;
-          } else {
-            element.srcObject = remoteStream;
-          }
+          element.srcObject = remoteStream;
           element.play().catch(e => console.error('Remote video play error:', e));
         }
       });
@@ -610,11 +741,25 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     // Создание оффера
     if (createOffer) {
       try {
-        const offer = await pc.createOffer({
+        const offerOptions: RTCOfferOptions = {
           offerToReceiveAudio: true,
           offerToReceiveVideo: true
-        });
-        await pc.setLocalDescription(offer);
+        };
+
+        // Дополнительные опции для Safari
+        if (isSafari) {
+          offerOptions.iceRestart = true;
+        }
+
+        const offer = await pc.createOffer(offerOptions);
+        
+        if (isSafari) {
+          // Специальная обработка для Safari
+          await pc.setLocalDescription(offer);
+        } else {
+          await pc.setLocalDescription(offer);
+        }
+        
         socket.emit(ACTIONS.RELAY_SDP, {
           peerID,
           sessionDescription: offer
@@ -674,10 +819,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       node.playsInline = true;
       node.muted = id === LOCAL_VIDEO || !participantSettings[id]?.audioEnabled;
       
-      // Для Apple устройств
-      node.setAttribute('playsinline', 'true');
-      node.setAttribute('webkit-playsinline', 'true');
-      
       if (id !== LOCAL_VIDEO && participantSettings[id]) {
         node.style.display = participantSettings[id].videoEnabled ? 'block' : 'none';
       }
@@ -686,7 +827,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       
       // Если это локальное видео, сразу устанавливаем правильный поток
       if (id === LOCAL_VIDEO) {
-        const activeStream = mediaState.screen ? screenShareStream.current : localMediaStream.current;
+        const activeStream = mediaState.screen && screenShareStream.current ? 
+          screenShareStream.current : localMediaStream.current;
         if (activeStream) {
           node.srcObject = activeStream;
           node.play().catch(e => console.error('Local video play error in provideMediaRef:', e));
@@ -726,13 +868,21 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       }
       
       try {
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(sessionDescription)
-        );
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        if (isSafari) {
+          // Специальная обработка для Safari
+          await pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+        } else {
+          await pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+        }
+        
         console.log(`Remote description set for peer ${peerID}:`, sessionDescription.type);
         
         if (sessionDescription.type === 'offer') {
-          const answer = await pc.createAnswer();
+          const answerOptions: RTCAnswerOptions = {};
+          // Для Safari используем стандартные настройки
+          
+          const answer = await pc.createAnswer(answerOptions);
           await pc.setLocalDescription(answer);
           socket.emit(ACTIONS.RELAY_SDP, {
             peerID,
