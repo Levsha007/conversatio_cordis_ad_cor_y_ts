@@ -52,56 +52,58 @@ const Main: React.FC = () => {
     // Рендер компонента
     return (
         <div className={styles.container}>
-            {/* Заголовок приложения */}
-            <h1 className={styles.title}>Video Conference</h1>
+            <div className={styles.content}>
+                {/* Заголовок приложения */}
+                <h1 className={styles.title}>Video Conference</h1>
 
-            {/* Блок управления комнатами */}
-            <div className={styles.roomControls}>
-                {/* Кнопка создания новой комнаты */}
-                <button
-                    onClick={handleCreateRoom}
-                    className={styles.createButton}
-                >
-                    Create New Room
-                </button>
-
-                {/* Блок для входа в существующую комнату */}
-                <div className={styles.joinContainer}>
-                    {/* Поле ввода ID комнаты */}
-                    <input
-                        type="text"
-                        value={roomIdInput}
-                        onChange={handleInputChange}
-                        placeholder="Enter Room ID"
-                        className={styles.roomIdInput}
-                    />
-                    {/* Кнопка входа в комнату (активна только при введенном ID) */}
+                {/* Блок управления комнатами */}
+                <div className={styles.roomControls}>
+                    {/* Кнопка создания новой комнаты */}
                     <button
-                        onClick={handleJoinRoom}
-                        disabled={!roomIdInput.trim()}
-                        className={styles.joinButton}
+                        onClick={handleCreateRoom}
+                        className={styles.createButton}
                     >
-                        Join Room
+                        Create New Room
                     </button>
+
+                    {/* Блок для входа в существующую комнату */}
+                    <div className={styles.joinContainer}>
+                        {/* Поле ввода ID комнаты */}
+                        <input
+                            type="text"
+                            value={roomIdInput}
+                            onChange={handleInputChange}
+                            placeholder="Enter Room ID"
+                            className={styles.roomIdInput}
+                        />
+                        {/* Кнопка входа в комнату (активна только при введенном ID) */}
+                        <button
+                            onClick={handleJoinRoom}
+                            disabled={!roomIdInput.trim()}
+                            className={styles.joinButton}
+                        >
+                            Join Room
+                        </button>
+                    </div>
+
+                    {/* Отображение ошибки */}
+                    {error && (
+                        <div className={styles.errorMessage}>
+                            {error}
+                        </div>
+                    )}
                 </div>
 
-                {/* Отображение ошибки */}
-                {error && (
-                    <div className={styles.errorMessage}>
-                        {error}
-                    </div>
-                )}
-            </div>
-
-            {/* Информационный блок с инструкциями */}
-            <div className={styles.infoBox}>
-                <h3 className={styles.infoTitle}>How it works:</h3>
-                <ol className={styles.infoList}>
-                    <li>Create a new room to get a unique room ID</li>
-                    <li>Share the room ID with participants</li>
-                    <li>Join using the room ID you received</li>
-                    <li>Room ID must be a valid UUID format</li>
-                </ol>
+                {/* Информационный блок с инструкциями */}
+                <div className={styles.infoBox}>
+                    <h3 className={styles.infoTitle}>How it works:</h3>
+                    <ol className={styles.infoList}>
+                        <li>Create a new room to get a unique room ID</li>
+                        <li>Share the room ID with participants</li>
+                        <li>Join using the room ID you received</li>
+                        <li>Room ID must be a valid UUID format</li>
+                    </ol>
+                </div>
             </div>
         </div>
     );

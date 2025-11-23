@@ -22,11 +22,11 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Базовые стили для видео элементов - ИСПРАВЛЕНО: убрано object-fit: cover */
+/* Базовые стили для видео элементов */
 .video {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Вернул нормальное отображение без обрезки */
+  object-fit: contain;
   transition: opacity 0.3s ease;
 }
 
@@ -367,7 +367,7 @@
   line-height: 1.4;
 }
 
-/* Панель управления (кнопки внизу экрана) - ИСПРАВЛЕНО: убраны фон и граница */
+/* Панель управления (кнопки внизу экрана) */
 .controls {
   position: fixed;
   bottom: 20px;
@@ -927,7 +927,7 @@
 }
 
 .videoWrapperFullscreen .video {
-  object-fit: contain; /* В полноэкранном режиме тоже нормальный размер */
+  object-fit: contain;
 }
 
 .videoWrapperHidden {

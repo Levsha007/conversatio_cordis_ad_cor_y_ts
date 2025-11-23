@@ -813,29 +813,37 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   }, []);
 
   // Привязка ref к видео элементам
-  const provideMediaRef = useCallback((id: string, node: HTMLVideoElement | null) => {
-    if (node) {
-      node.autoplay = true;
-      node.playsInline = true;
-      node.muted = id === LOCAL_VIDEO || !participantSettings[id]?.audioEnabled;
-      
-      if (id !== LOCAL_VIDEO && participantSettings[id]) {
-        node.style.display = participantSettings[id].videoEnabled ? 'block' : 'none';
-      }
-      
-      peerMediaElements.current[id] = node;
-      
-      // Если это локальное видео, сразу устанавливаем правильный поток
-      if (id === LOCAL_VIDEO) {
-        const activeStream = mediaState.screen && screenShareStream.current ? 
-          screenShareStream.current : localMediaStream.current;
-        if (activeStream) {
-          node.srcObject = activeStream;
-          node.play().catch(e => console.error('Local video play error in provideMediaRef:', e));
-        }
+  // ЗАМЕНИТЕ функцию provideMediaRef в существующем файле useWebRTC.ts на эту версию:
+
+const provideMediaRef = useCallback((id: string, node: HTMLVideoElement | null) => {
+  // Если элемент не изменился, ничего не делаем
+  if (peerMediaElements.current[id] === node) return;
+  
+  if (node) {
+    node.autoplay = true;
+    node.playsInline = true;
+    node.muted = id === LOCAL_VIDEO || !participantSettings[id]?.audioEnabled;
+    
+    if (id !== LOCAL_VIDEO && participantSettings[id]) {
+      node.style.display = participantSettings[id].videoEnabled ? 'block' : 'none';
+    }
+    
+    peerMediaElements.current[id] = node;
+    
+    // Для локального видео устанавливаем поток только если он доступен и отличается
+    if (id === LOCAL_VIDEO) {
+      const activeStream = mediaState.screen && screenShareStream.current ? 
+        screenShareStream.current : localMediaStream.current;
+      if (activeStream && node.srcObject !== activeStream) {
+        node.srcObject = activeStream;
+        node.play().catch(e => console.error('Local video play error in provideMediaRef:', e));
       }
     }
-  }, [participantSettings, mediaState.screen]);
+  } else {
+    // Удаляем элемент из ref если node равен null
+    delete peerMediaElements.current[id];
+  }
+}, [participantSettings, mediaState.screen]);
 
   // Инициализация WebRTC при изменении roomID
   useEffect(() => {

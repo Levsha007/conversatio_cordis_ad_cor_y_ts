@@ -241,120 +241,11 @@ const Room: React.FC = () => {
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Инициализация сообщений при монтировании
-  useEffect(() => {
-    if (getChatMessages) {
-      setMessages(getChatMessages());
-    }
-  }, [getChatMessages]);
-
-  /**
-   * Обработчик выбора устройств
-   */
-  const handleDeviceSelection = async (settings: DeviceSettings) => {
-    setShowDeviceSelection(false);
-    await initializeMedia(settings);
-    setDevicesInitialized(true);
-  };
-
-  /**
-   * Переключение полноэкранного режима для участника
-   */
-  const toggleFullscreen = (clientID: string) => {
-    if (fullscreenParticipant === clientID) {
-      setFullscreenParticipant(null);
-    } else {
-      setFullscreenParticipant(clientID);
-    }
-  };
-
-  /**
-   * Получение отображаемого имени пользователя
-   */
-  const getUserDisplayName = (userId: string): string => {
-    if (userId === LOCAL_VIDEO) return 'Вы';
-    const number = userNumbers[userId];
-    return number ? `Участник ${number}` : `Участник`;
-  };
-
-  /**
-   * Получение метки отправителя сообщения
-   */
-  const getSenderLabel = (senderId: string): string => {
-    if (senderId === socket.id) return 'Вы';
-    const number = userNumbers[senderId];
-    return number ? `Участник ${number}` : `Участник`;
-  };
-
-  /**
-   * Копирование ссылки на комнату в буфер обмена
-   */
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setIsCopied(true);
-      if (copyTimeout.current) clearTimeout(copyTimeout.current);
-      copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
-    } catch (err) {
-      console.error('Ошибка при копировании ссылки:', err);
-    }
-  };
-
-  /**
-   * Выход из комнаты с подтверждением
-   */
-  const handleLeaveRoom = () => {
-    if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
-      navigate('/');
-    }
-  };
-
-  /**
-   * Повторная попытка подключения
-   */
-  const handleRetry = async () => {
-    setRetryCount(prev => prev + 1);
-    errorShown.current = false;
-    await reconnect();
-  };
-
-  /**
-   * Запуск демонстрации экрана
-   */
-  const handleStartScreenShare = async () => {
-    try {
-      await startScreenShare();
-    } catch (err) {
-      console.error('Ошибка демонстрации экрана:', err);
-      if (err instanceof Error) {
-        if (err.name === 'NotAllowedError') {
-          alert('Разрешение на демонстрацию экрана было отклонено');
-        } else {
-          alert('Не удалось начать демонстрацию экрана: ' + err.message);
-        }
-      } else {
-        alert('Не удалось начать демонстрацию экрана');
-      }
-    }
-  };
-
-  /**
-   * Остановка демонстрации экрана
-   */
-  const handleStopScreenShare = () => {
-    stopScreenShare();
-  };
-
-  /**
-   * Обработчик изменения поля ввода сообщения
-   */
+  // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setMessageInput(e.target.value);
   }, []);
 
-  /**
-   * Отправка сообщения в чат
-   */
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
     if (trimmedMessage && roomID) {
@@ -381,10 +272,120 @@ const Room: React.FC = () => {
     }
   }, [messageInput, roomID, addChatMessage]);
 
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSendMessage();
+    }
+  }, [handleSendMessage]);
+
+  // Инициализация сообщений при монтировании
+  useEffect(() => {
+    if (getChatMessages) {
+      setMessages(getChatMessages());
+    }
+  }, [getChatMessages]);
+
+  /**
+   * Обработчик выбора устройств
+   */
+  const handleDeviceSelection = async (settings: DeviceSettings) => {
+    setShowDeviceSelection(false);
+    await initializeMedia(settings);
+    setDevicesInitialized(true);
+  };
+
+  /**
+   * Переключение полноэкранного режима для участника
+   */
+  const toggleFullscreen = useCallback((clientID: string) => {
+    if (fullscreenParticipant === clientID) {
+      setFullscreenParticipant(null);
+    } else {
+      setFullscreenParticipant(clientID);
+    }
+  }, [fullscreenParticipant]);
+
+  /**
+   * Получение отображаемого имени пользователя
+   */
+  const getUserDisplayName = useCallback((userId: string): string => {
+    if (userId === LOCAL_VIDEO) return 'Вы';
+    const number = userNumbers[userId];
+    return number ? `Участник ${number}` : `Участник`;
+  }, [userNumbers]);
+
+  /**
+   * Получение метки отправителя сообщения
+   */
+  const getSenderLabel = useCallback((senderId: string): string => {
+    if (senderId === socket.id) return 'Вы';
+    const number = userNumbers[senderId];
+    return number ? `Участник ${number}` : `Участник`;
+  }, [userNumbers]);
+
+  /**
+   * Копирование ссылки на комнату в буфер обмена
+   */
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setIsCopied(true);
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+      copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Ошибка при копировании ссылки:', err);
+    }
+  }, []);
+
+  /**
+   * Выход из комнаты с подтверждением
+   */
+  const handleLeaveRoom = useCallback(() => {
+    if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
+      navigate('/');
+    }
+  }, [navigate]);
+
+  /**
+   * Повторная попытка подключения
+   */
+  const handleRetry = useCallback(async () => {
+    setRetryCount(prev => prev + 1);
+    errorShown.current = false;
+    await reconnect();
+  }, [reconnect]);
+
+  /**
+   * Запуск демонстрации экрана
+   */
+  const handleStartScreenShare = useCallback(async () => {
+    try {
+      await startScreenShare();
+    } catch (err) {
+      console.error('Ошибка демонстрации экрана:', err);
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          alert('Разрешение на демонстрацию экрана было отклонено');
+        } else {
+          alert('Не удалось начать демонстрацию экрана: ' + err.message);
+        }
+      } else {
+        alert('Не удалось начать демонстрацию экрана');
+      }
+    }
+  }, [startScreenShare]);
+
+  /**
+   * Остановка демонстрации экрана
+   */
+  const handleStopScreenShare = useCallback(() => {
+    stopScreenShare();
+  }, [stopScreenShare]);
+
   /**
    * Обработчик выбора файла
    */
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && roomID) {
       const fileId = `${socket.id}-${Date.now()}`;
@@ -413,7 +414,7 @@ const Room: React.FC = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, [roomID, addChatMessage]);
 
   // Автопрокрутка чата к последнему сообщению
   useEffect(() => {
@@ -591,7 +592,7 @@ const Room: React.FC = () => {
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
-          key={clientID}
+          key={clientID} // Используем только clientID как ключ
           className={`${styles.videoWrapper} ${
             fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
           } ${
@@ -606,13 +607,12 @@ const Room: React.FC = () => {
             muted={clientID === LOCAL_VIDEO || !participantSettings[clientID]?.audioEnabled}
             className={`${styles.video} ${
               clientID === LOCAL_VIDEO && !mediaState.video && !mediaState.screen ? styles.videoLocalHidden : ''
-            } ${
-              !participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''
-            }`}
+            } ${!participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''}`}
           />
           
           {/* Плейсхолдер для участников без видео */}
-          {!peerMediaElements.current[clientID]?.srcObject && clientID !== LOCAL_VIDEO && (
+          {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject || 
+            (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0)) && (
             <div className={styles.participantPlaceholder}>
               <div className={styles.participantAvatar}>
                 {getUserDisplayName(clientID).charAt(0)}
@@ -838,7 +838,7 @@ const Room: React.FC = () => {
               type="text"
               value={messageInput}
               onChange={handleInputChange}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyPress={handleKeyPress}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
               aria-label="Введите сообщение"
