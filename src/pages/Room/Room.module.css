@@ -367,7 +367,7 @@
   line-height: 1.4;
 }
 
-/* Панель управления (кнопки внизу экрана) */
+/* Панель управления (кнопки внизу экрана) - ИСПРАВЛЕНО: убраны фон и граница */
 .controls {
   position: fixed;
   bottom: 20px;
@@ -380,11 +380,11 @@
   flex-wrap: wrap;
   justify-content: center;
   max-width: 95vw;
-  padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 30px;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  /* Убраны фон и граница */
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
 }
 
 /* Базовые стили кнопок управления */
@@ -402,125 +402,126 @@
   transition: all 0.2s ease;
   font-size: 1.1rem;
   position: relative;
-  background: rgba(255, 255, 255, 0.15);
+  /* Улучшенные стили кнопок */
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Эффект при наведении на кнопки */
 .controlButton:hover {
-  transform: scale(1.1);
-  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.15);
+  background: rgba(0, 0, 0, 0.9);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
 /* Стили для кнопки включённого микрофона */
 .controlButtonMicOn {
-  background: rgba(76, 175, 80, 0.7);
+  background: rgba(76, 175, 80, 0.8);
 }
 
 .controlButtonMicOn:hover {
-  background: rgba(76, 175, 80, 0.9);
+  background: rgba(76, 175, 80, 1);
 }
 
 /* Стили для кнопки выключенного микрофона */
 .controlButtonMicOff {
-  background: rgba(244, 67, 54, 0.7);
+  background: rgba(244, 67, 54, 0.8);
 }
 
 .controlButtonMicOff:hover {
-  background: rgba(244, 67, 54, 0.9);
+  background: rgba(244, 67, 54, 1);
 }
 
 /* Стили для кнопки включённой камеры */
 .controlButtonCamOn {
-  background: rgba(76, 175, 80, 0.7);
+  background: rgba(76, 175, 80, 0.8);
 }
 
 .controlButtonCamOn:hover {
-  background: rgba(76, 175, 80, 0.9);
+  background: rgba(76, 175, 80, 1);
 }
 
 /* Стили для кнопки выключенной камеры */
 .controlButtonCamOff {
-  background: rgba(244, 67, 54, 0.7);
+  background: rgba(244, 67, 54, 0.8);
 }
 
 .controlButtonCamOff:hover {
-  background: rgba(244, 67, 54, 0.9);
+  background: rgba(244, 67, 54, 1);
 }
 
 /* Стили для кнопки демонстрации экрана */
 .controlButtonScreenShare {
-  background: rgba(255, 152, 0, 0.7);
+  background: rgba(255, 152, 0, 0.8);
 }
 
 .controlButtonScreenShare:hover {
-  background: rgba(255, 152, 0, 0.9);
+  background: rgba(255, 152, 0, 1);
 }
 
 /* Стили для активной кнопки демонстрации экрана */
 .controlButtonScreenShareActive {
-  background: rgba(244, 67, 54, 0.7);
+  background: rgba(244, 67, 54, 0.8);
 }
 
 .controlButtonScreenShareActive:hover {
-  background: rgba(244, 67, 54, 0.9);
+  background: rgba(244, 67, 54, 1);
 }
 
 /* Стили для кнопки чата (неактивное состояние) */
 .controlButtonChat {
-  background: rgba(85, 85, 85, 0.7);
+  background: rgba(85, 85, 85, 0.8);
 }
 
 .controlButtonChat:hover {
-  background: rgba(85, 85, 85, 0.9);
+  background: rgba(85, 85, 85, 1);
 }
 
 /* Стили для кнопки чата (активное состояние) */
 .controlButtonChatActive {
-  background: rgba(33, 150, 243, 0.7);
+  background: rgba(33, 150, 243, 0.8);
 }
 
 .controlButtonChatActive:hover {
-  background: rgba(33, 150, 243, 0.9);
+  background: rgba(33, 150, 243, 1);
 }
 
 /* Стили для кнопки настроек (неактивное состояние) */
 .controlButtonSettings {
-  background: rgba(85, 85, 85, 0.7);
+  background: rgba(85, 85, 85, 0.8);
 }
 
 .controlButtonSettings:hover {
-  background: rgba(85, 85, 85, 0.9);
+  background: rgba(85, 85, 85, 1);
 }
 
 /* Стили для кнопки настроек (активное состояние) */
 .controlButtonSettingsActive {
-  background: rgba(255, 152, 0, 0.7);
+  background: rgba(255, 152, 0, 0.8);
 }
 
 .controlButtonSettingsActive:hover {
-  background: rgba(255, 152, 0, 0.9);
+  background: rgba(255, 152, 0, 1);
 }
 
 /* Стили для кнопки выхода из комнаты */
 .controlButtonLeave {
-  background: rgba(244, 67, 54, 0.7);
+  background: rgba(244, 67, 54, 0.8);
 }
 
 .controlButtonLeave:hover {
-  background: rgba(244, 67, 54, 0.9);
+  background: rgba(244, 67, 54, 1);
 }
 
 /* Стили для кнопки копирования */
 .copyButton {
-  position: relative;
-  background: rgba(85, 85, 85, 0.7);
-  transition: background 0.2s ease;
+  background: rgba(85, 85, 85, 0.8);
 }
 
 .copyButton:hover {
-  background: rgba(85, 85, 85, 0.9);
+  background: rgba(85, 85, 85, 1);
 }
 
 .copyLabel {

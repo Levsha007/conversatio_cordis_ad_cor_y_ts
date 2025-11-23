@@ -1,5 +1,5 @@
 // Импорт необходимых зависимостей
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
 import socket from '../../socket';
@@ -225,7 +225,10 @@ const Room: React.FC = () => {
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
   const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
-  const videoLayout = calculateLayout(clients.length, isMobile, fullscreenParticipant);
+  const videoLayout = useMemo(() => 
+    calculateLayout(clients.length, isMobile, fullscreenParticipant),
+    [clients.length, isMobile, fullscreenParticipant]
+  );
   const [retryCount, setRetryCount] = useState(0);
   const errorShown = useRef(false);
   const [messageInput, setMessageInput] = useState('');
@@ -343,9 +346,16 @@ const Room: React.FC = () => {
   };
 
   /**
+   * Обработчик изменения поля ввода сообщения
+   */
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageInput(e.target.value);
+  }, []);
+
+  /**
    * Отправка сообщения в чат
    */
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
     if (trimmedMessage && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
@@ -369,7 +379,7 @@ const Room: React.FC = () => {
         timestamp: new Date().toISOString()
       });
     }
-  };
+  }, [messageInput, roomID, addChatMessage]);
 
   /**
    * Обработчик выбора файла
@@ -581,7 +591,7 @@ const Room: React.FC = () => {
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
-          key={`${clientID}-${retryCount}`} 
+          key={clientID}
           className={`${styles.videoWrapper} ${
             fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
           } ${
@@ -827,7 +837,7 @@ const Room: React.FC = () => {
             <input
               type="text"
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
