@@ -11,6 +11,7 @@ interface ChatMessage {
   message: string;     // Текст сообщения
   timestamp: string;   // Временная метка
   userNumber?: number; // Номер пользователя
+  userName?: string;   // Имя пользователя
 }
 
 /**
@@ -53,6 +54,7 @@ interface ServerToClientEvents {
     message: string;
     timestamp: string;
     userNumber?: number;
+    userName?: string;
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
@@ -70,6 +72,7 @@ interface ClientToServerEvents {
     message: string;
     id: string;
     timestamp: string;
+    userName?: string;
   }) => void;
   [ACTIONS.REQUEST_CHAT_HISTORY]: (params: { roomID: string }) => void;
   [ACTIONS.FILE_ATTACHED]: (params: {

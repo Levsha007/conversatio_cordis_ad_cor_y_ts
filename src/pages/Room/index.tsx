@@ -23,6 +23,7 @@ interface ChatMessage {
   isLocal: boolean;
   timestamp: string;
   sender: string;
+  userName?: string;
 }
 
 /**
@@ -81,12 +82,13 @@ const useTabSync = (roomId: string) => {
  * Компонент выбора устройств перед входом в комнату
  */
 const DeviceSelection: React.FC<{
-  onJoin: (settings: DeviceSettings) => void;
+  onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
   const [settings, setSettings] = useState<DeviceSettings>({
     audio: false,
     video: false
   });
+  const [name, setName] = useState('');
 
   const handleToggle = (device: keyof DeviceSettings) => {
     setSettings(prev => ({
@@ -96,13 +98,30 @@ const DeviceSelection: React.FC<{
   };
 
   const handleJoin = () => {
-    onJoin(settings);
+    onJoin(settings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
   };
 
   return (
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
-        <h2>Настройка устройств</h2>
+        <h2>Настройка перед входом</h2>
+        
+        {/* Поле для ввода имени */}
+        <div className={styles.nameInputSection}>
+          <label className={styles.nameLabel}>Ваше имя (необязательно):</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Введите ваше имя"
+            className={styles.nameInput}
+            maxLength={50}
+          />
+          <div className={styles.nameHint}>
+            Если не указать имя, будет сгенерировано автоматически
+          </div>
+        </div>
+
         <p>Выберите устройства для начала видеоконференции:</p>
         
         <div className={styles.deviceOptions}>
@@ -143,7 +162,7 @@ const DeviceSelection: React.FC<{
         </div>
 
         <div className={styles.deviceSelectionHint}>
-          <p>💡 Выберите устройства, которые собираетесь использовать. Если решите изменить выбор — перезагрузите страницу.</p>
+          <p>💡 Вы можете изменить настройки позже в панели управления</p>
         </div>
       </div>
     </div>
@@ -239,7 +258,11 @@ const Room: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<NodeJS.Timeout | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [participantCount, setParticipantCount] = useState(1);
+  const [userName, setUserName] = useState('');
+  const [showNameInput, setShowNameInput] = useState(false);
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,7 +278,8 @@ const Room: React.FC = () => {
         text: trimmedMessage,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
-        sender: socket.id || 'unknown'
+        sender: socket.id || 'unknown',
+        userName: userName
       };
       
       if (addChatMessage) {
@@ -267,10 +291,11 @@ const Room: React.FC = () => {
         roomID,
         message: trimmedMessage,
         id: messageId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        userName: userName
       });
     }
-  }, [messageInput, roomID, addChatMessage]);
+  }, [messageInput, roomID, addChatMessage, userName]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -285,11 +310,18 @@ const Room: React.FC = () => {
     }
   }, [getChatMessages]);
 
+  // Обновляем счетчик участников
+  useEffect(() => {
+    setParticipantCount(clients.length);
+  }, [clients.length]);
+
   /**
    * Обработчик выбора устройств
    */
-  const handleDeviceSelection = async (settings: DeviceSettings) => {
+  const handleDeviceSelection = async (settings: DeviceSettings, name: string) => {
     setShowDeviceSelection(false);
+    setUserName(name);
+    setUserNames(prev => ({ ...prev, [socket.id as string]: name }));
     await initializeMedia(settings);
     setDevicesInitialized(true);
   };
@@ -309,19 +341,21 @@ const Room: React.FC = () => {
    * Получение отображаемого имени пользователя
    */
   const getUserDisplayName = useCallback((userId: string): string => {
-    if (userId === LOCAL_VIDEO) return 'Вы';
+    if (userId === LOCAL_VIDEO) return userName || 'Вы';
     const number = userNumbers[userId];
-    return number ? `Участник ${number}` : `Участник`;
-  }, [userNumbers]);
+    const name = userNames[userId];
+    return name || (number ? `Участник ${number}` : `Участник`);
+  }, [userName, userNumbers, userNames]);
 
   /**
    * Получение метки отправителя сообщения
    */
   const getSenderLabel = useCallback((senderId: string): string => {
-    if (senderId === socket.id) return 'Вы';
+    if (senderId === socket.id) return userName || 'Вы';
     const number = userNumbers[senderId];
-    return number ? `Участник ${number}` : `Участник`;
-  }, [userNumbers]);
+    const name = userNames[senderId];
+    return name || (number ? `Участник ${number}` : `Участник`);
+  }, [userName, userNumbers, userNames]);
 
   /**
    * Копирование ссылки на комнату в буфер обмена
@@ -395,7 +429,8 @@ const Room: React.FC = () => {
         text: fileNameWithIcon,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
-        sender: socket.id || 'unknown'
+        sender: socket.id || 'unknown',
+        userName: userName
       };
       
       if (addChatMessage) {
@@ -407,14 +442,15 @@ const Room: React.FC = () => {
         roomID,
         message: fileNameWithIcon,
         id: fileId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        userName: userName
       });
     }
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [roomID, addChatMessage]);
+  }, [roomID, addChatMessage, userName]);
 
   // Автопрокрутка чата к последнему сообщению
   useEffect(() => {
@@ -441,6 +477,11 @@ const Room: React.FC = () => {
         delete newNumbers[peerID];
         return newNumbers;
       });
+      setUserNames(prev => {
+        const newNames = { ...prev };
+        delete newNames[peerID];
+        return newNames;
+      });
     };
 
     const handleChatMessage = (msg: {
@@ -449,9 +490,13 @@ const Room: React.FC = () => {
       sender: string;
       timestamp: string;
       userNumber?: number;
+      userName?: string;
     }) => {
       if (msg.userNumber && msg.sender !== socket.id) {
         setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
+      }
+      if (msg.userName && msg.sender !== socket.id) {
+        setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
       }
     };
 
@@ -474,6 +519,7 @@ const Room: React.FC = () => {
       sender: string;
       timestamp: string;
       userNumber?: number;
+      userName?: string;
     }) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
@@ -481,13 +527,17 @@ const Room: React.FC = () => {
         if (msg.userNumber && msg.sender !== socket.id) {
           setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
         }
+        if (msg.userName && msg.sender !== socket.id) {
+          setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
+        }
         
         const newMessage = {
           id: msg.id,
           text: msg.message,
           isLocal: msg.sender === socket.id,
           timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-          sender: msg.sender
+          sender: msg.sender,
+          userName: msg.userName
         };
         
         if (addChatMessage) {
@@ -504,7 +554,8 @@ const Room: React.FC = () => {
         text: msg.message,
         isLocal: msg.sender === socket.id,
         timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-        sender: msg.sender
+        sender: msg.sender,
+        userName: msg.userName
       }));
       
       setMessages(formattedMessages);
@@ -512,6 +563,9 @@ const Room: React.FC = () => {
       historyMessages.forEach(msg => {
         if (msg.userNumber && msg.sender !== socket.id) {
           setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber }));
+        }
+        if (msg.userName && msg.sender !== socket.id) {
+          setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName }));
         }
       });
     };
@@ -592,7 +646,7 @@ const Room: React.FC = () => {
       {/* Видео потоки участников */}
       {clients.map((clientID, index) => (
         <div 
-          key={clientID} // Используем только clientID как ключ
+          key={clientID}
           className={`${styles.videoWrapper} ${
             fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
           } ${
@@ -880,6 +934,26 @@ const Room: React.FC = () => {
             </button>
           </div>
 
+          {/* Счетчик участников */}
+          <div className={styles.participantCounter}>
+            <div className={styles.counterLabel}>Участников в комнате:</div>
+            <div className={styles.counterValue}>{participantCount}</div>
+          </div>
+
+          {/* Настройки имени */}
+          <div className={styles.nameSettings}>
+            <label className={styles.settingsLabel}>
+              Ваше имя:
+            </label>
+            <div className={styles.currentName}>{userName || 'Не указано'}</div>
+            <button
+              onClick={() => setShowNameInput(true)}
+              className={styles.changeNameButton}
+            >
+              Изменить имя
+            </button>
+          </div>
+
           {/* Выбор микрофона */}
           {availableDevices.audio.length > 0 && (
             <div className={styles.settingsSection}>
@@ -921,6 +995,40 @@ const Room: React.FC = () => {
               </select>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Модальное окно изменения имени */}
+      {showNameInput && (
+        <div className={styles.nameInputOverlay}>
+          <div className={styles.nameInputModal}>
+            <h3>Изменение имени</h3>
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Введите ваше имя"
+              className={styles.nameInputField}
+              maxLength={50}
+            />
+            <div className={styles.nameInputButtons}>
+              <button
+                onClick={() => setShowNameInput(false)}
+                className={styles.cancelButton}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  setUserNames(prev => ({ ...prev, [socket.id as string]: userName }));
+                  setShowNameInput(false);
+                }}
+                className={styles.saveButton}
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

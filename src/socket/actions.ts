@@ -100,6 +100,7 @@ interface ChatMessage {
   message: string; // Текст сообщения
   timestamp: string; // Временная метка
   userNumber?: number; // Номер пользователя
+  userName?: string; // Имя пользователя
 }
 
 // Сообщение о прикреплённом файле
@@ -131,6 +132,7 @@ interface ClientToServerEvents {
     message: string;
     id: string;
     timestamp: string;
+    userName?: string;
   }) => void;
   [ACTIONS.REQUEST_CHAT_HISTORY]: (params: { roomID: string }) => void;
   [ACTIONS.FILE_ATTACHED]: (params: {

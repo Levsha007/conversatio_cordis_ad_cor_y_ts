@@ -217,14 +217,18 @@
   opacity: 0.8;
 }
 
-/* Окно выбора устройств */
+/* Стили для формы выбора устройств в стиле главной страницы */
 .deviceSelectionOverlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.9);
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(179, 0, 0, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(128, 0, 0, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(102, 0, 0, 0.1) 0%, transparent 50%),
+    linear-gradient(135deg, #0c0c0c 0%, #1a0f0f 50%, #0c0c0c 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -235,7 +239,7 @@
 
 .deviceSelectionModal {
   background: rgba(255, 255, 255, 0.95);
-  padding: 30px;
+  padding: 40px;
   border-radius: 20px;
   max-width: 500px;
   width: 100%;
@@ -245,19 +249,68 @@
   overflow-y: auto;
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(30, 30, 30, 0.95);
+  color: white;
 }
 
 .deviceSelectionModal h2 {
   margin-bottom: 10px;
-  color: #2c3e50;
-  font-size: 1.5rem;
+  color: #ffffff;
+  font-size: 1.8rem;
+  font-weight: 300;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .deviceSelectionModal p {
   margin-bottom: 25px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   line-height: 1.5;
   font-size: 1rem;
+}
+
+/* Стили для поля ввода имени */
+.nameInputSection {
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.nameLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+
+.nameInput {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: #b30000;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(179, 0, 0, 0.1);
+}
+
+.nameInput::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nameHint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 5px;
 }
 
 .deviceOptions {
@@ -271,16 +324,16 @@
   display: flex;
   align-items: center;
   padding: 15px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 15px;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .deviceOption:hover {
-  border-color: #2196F3;
-  background: #f0f8ff;
+  border-color: #b30000;
+  background: rgba(179, 0, 0, 0.1);
 }
 
 .deviceOption input {
@@ -290,7 +343,7 @@
 .checkbox {
   width: 20px;
   height: 20px;
-  border: 2px solid #ccc;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   margin-right: 15px;
   position: relative;
@@ -299,8 +352,8 @@
 }
 
 .deviceOption input:checked + .checkbox {
-  background: #2196F3;
-  border-color: #2196F3;
+  background: #b30000;
+  border-color: #b30000;
 }
 
 .deviceOption input:checked + .checkbox::after {
@@ -320,7 +373,7 @@
   gap: 10px;
   font-size: 16px;
   font-weight: 500;
-  color: #333;
+  color: #ffffff;
 }
 
 .deviceIcon {
@@ -336,33 +389,37 @@
 }
 
 .deviceSelectionModal .joinButton {
-  padding: 12px 24px;
-  background: #4CAF50;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #b30000 0%, #800000 100%);
   color: white;
   border: none;
-  border-radius: 25px;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 16px;
-  transition: background 0.3s ease;
-  min-width: 150px;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  min-width: 200px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 8px 25px rgba(179, 0, 0, 0.3);
 }
 
 .deviceSelectionModal .joinButton:hover {
-  background: #45a049;
+  background: linear-gradient(135deg, #cc0000 0%, #990000 100%);
   transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(179, 0, 0, 0.4);
 }
 
 .deviceSelectionHint {
-  background: #e3f2fd;
+  background: rgba(179, 0, 0, 0.1);
   padding: 15px;
   border-radius: 12px;
-  border-left: 4px solid #2196F3;
+  border-left: 4px solid #b30000;
 }
 
 .deviceSelectionHint p {
   margin: 0;
-  color: #1976d2;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -381,7 +438,6 @@
   justify-content: center;
   max-width: 95vw;
   padding: 8px 16px;
-  /* Убраны фон и граница */
   background: transparent;
   backdrop-filter: none;
   border: none;
@@ -402,7 +458,6 @@
   transition: all 0.2s ease;
   font-size: 1.1rem;
   position: relative;
-  /* Улучшенные стили кнопок */
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -854,6 +909,147 @@
   border-color: #2196F3;
   outline: none;
   background: white;
+}
+
+/* Стили для счетчика участников */
+.participantCounter {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.counterLabel {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 5px;
+}
+
+.counterValue {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #b30000;
+}
+
+/* Стили для настроек имени */
+.nameSettings {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.currentName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.changeNameButton {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.changeNameButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #b30000;
+}
+
+/* Стили для модального окна изменения имени */
+.nameInputOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.nameInputModal {
+  background: rgba(30, 30, 30, 0.95);
+  padding: 30px;
+  border-radius: 16px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px);
+}
+
+.nameInputModal h3 {
+  margin-bottom: 20px;
+  color: #ffffff;
+  font-size: 1.4rem;
+}
+
+.nameInputField {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  margin-bottom: 20px;
+}
+
+.nameInputField:focus {
+  outline: none;
+  border-color: #b30000;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.nameInputButtons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.cancelButton {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancelButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.saveButton {
+  padding: 10px 20px;
+  background: #b30000;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.saveButton:hover {
+  background: #cc0000;
 }
 
 /* Оверлей ошибок */

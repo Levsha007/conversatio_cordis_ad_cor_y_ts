@@ -40,6 +40,10 @@
     padding: 60px 40px;
     position: relative;
     z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .title {
@@ -58,6 +62,7 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     position: relative;
+    text-align: center;
 }
 
 .title::after {
@@ -76,6 +81,8 @@
     flex-direction: column;
     gap: 30px;
     margin-bottom: 50px;
+    width: 100%;
+    align-items: center;
 }
 
 .createButton {
@@ -145,6 +152,7 @@
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
     font-family: inherit;
+    text-align: center;
 }
 
 .roomIdInput:focus {
@@ -206,6 +214,7 @@
     width: 100%;
     max-width: 400px;
     backdrop-filter: blur(10px);
+    text-align: center;
 }
 
 .infoBox {
@@ -213,7 +222,7 @@
     padding: 40px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 16px;
-    text-align: left;
+    text-align: center;
     backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     width: 100%;
@@ -232,24 +241,23 @@
 }
 
 .infoList {
-    padding-left: 20px;
+    padding-left: 0;
     color: rgba(255, 255, 255, 0.9);
     line-height: 1.8;
     font-size: 1.05rem;
+    text-align: left;
+    list-style-position: inside;
 }
 
 .infoList li {
     margin-bottom: 16px;
-    padding-left: 10px;
+    padding-left: 0;
     position: relative;
 }
 
+/* Убраны треугольнички перед пунктами списка */
 .infoList li::before {
-    content: '▸';
-    color: #b30000;
-    position: absolute;
-    left: -15px;
-    font-weight: bold;
+    content: none;
 }
 
 /* Мобильные стили */
@@ -297,7 +305,7 @@
     
     .infoList {
         font-size: 1rem;
-        padding-left: 15px;
+        padding-left: 0;
     }
     
     .infoList li {
