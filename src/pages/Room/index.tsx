@@ -287,6 +287,8 @@ const Room: React.FC = () => {
       }
       setMessages(prev => [...prev, newMessage]);
       setMessageInput('');
+      
+      // Отправляем сообщение с именем пользователя
       socket.emit(ACTIONS.CHAT_MESSAGE, {
         roomID,
         message: trimmedMessage,
@@ -322,7 +324,7 @@ const Room: React.FC = () => {
     setShowDeviceSelection(false);
     setUserName(name);
     setUserNames(prev => ({ ...prev, [socket.id as string]: name }));
-    await initializeMedia(settings);
+    await initializeMedia(settings, name);
     setDevicesInitialized(true);
   };
 
@@ -342,9 +344,7 @@ const Room: React.FC = () => {
    */
   const getUserDisplayName = useCallback((userId: string): string => {
     if (userId === LOCAL_VIDEO) return userName || 'Вы';
-    const number = userNumbers[userId];
-    const name = userNames[userId];
-    return name || (number ? `Участник ${number}` : `Участник`);
+    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
   /**
@@ -352,9 +352,7 @@ const Room: React.FC = () => {
    */
   const getSenderLabel = useCallback((senderId: string): string => {
     if (senderId === socket.id) return userName || 'Вы';
-    const number = userNumbers[senderId];
-    const name = userNames[senderId];
-    return name || (number ? `Участник ${number}` : `Участник`);
+    return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
   /**
@@ -461,13 +459,19 @@ const Room: React.FC = () => {
 
   // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
-    const handleAddPeer = ({ peerID, userNumber }: { 
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName }: { 
       peerID: string; 
       createOffer: boolean;
       userNumber?: number;
+      userName?: string;
     }) => {
+      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName);
+      
       if (userNumber) {
         setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
+      }
+      if (userName) {
+        setUserNames(prev => ({ ...prev, [peerID]: userName }));
       }
     };
 
@@ -498,6 +502,21 @@ const Room: React.FC = () => {
       if (msg.userName && msg.sender !== socket.id) {
         setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
       }
+      
+      // Добавляем сообщение в чат
+      const newMessage: ChatMessage = {
+        id: msg.id,
+        text: msg.message,
+        isLocal: msg.sender === socket.id,
+        timestamp: new Date(msg.timestamp).toLocaleTimeString(),
+        sender: msg.sender,
+        userName: msg.userName || getSenderLabel(msg.sender)
+      };
+      
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, newMessage];
+      });
     };
 
     socket.on(ACTIONS.ADD_PEER, handleAddPeer);
@@ -509,7 +528,7 @@ const Room: React.FC = () => {
       socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
       socket.off(ACTIONS.CHAT_MESSAGE, handleChatMessage);
     };
-  }, []);
+  }, [getSenderLabel]);
 
   // Подписка на события чата и запрос истории
   useEffect(() => {

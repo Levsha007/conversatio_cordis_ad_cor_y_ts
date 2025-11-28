@@ -1124,6 +1124,8 @@
 
 .videoWrapperFullscreen .video {
   object-fit: contain;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .videoWrapperHidden {
@@ -1431,5 +1433,91 @@
   .chatContainer {
     width: 320px;
     height: 400px;
+  }
+}
+
+/* Исправления для полноэкранного режима на мобильных устройствах */
+.videoWrapperFullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1000;
+  background: #000;
+}
+
+.videoWrapperFullscreen .video {
+  object-fit: contain;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Для мобильных устройств с вертикальной ориентацией */
+@media (max-width: 767px) and (orientation: portrait) {
+  .videoWrapperFullscreen {
+    height: 100vh !important;
+  }
+  
+  .videoWrapperFullscreen .video {
+    object-fit: contain;
+  }
+}
+
+/* Для мобильных устройств с горизонтальной ориентацией */
+@media (max-width: 767px) and (orientation: landscape) {
+  .videoWrapperFullscreen {
+    height: 100vh !important;
+  }
+  
+  .videoWrapperFullscreen .video {
+    object-fit: contain;
+  }
+}
+
+/* Улучшения для очень маленьких экранов */
+@media (max-width: 360px) {
+  .videoWrapperFullscreen .userLabel {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  
+  .videoWrapperFullscreen .videoTopControls {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+  }
+}
+
+/* Дополнительные стили для улучшения отображения на мобильных */
+.videoWrapper {
+  transition: all 0.3s ease;
+}
+
+.videoWrapperFullscreen {
+  animation: expandToFullscreen 0.3s ease-out;
+}
+
+@keyframes expandToFullscreen {
+  from {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Улучшение кнопки выхода из полноэкранного режима для мобильных */
+@media (max-width: 767px) {
+  .exitFullscreenButton {
+    top: 10px;
+    right: 10px;
+    padding: 10px 15px;
+    font-size: 12px;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 }

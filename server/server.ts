@@ -15,6 +15,8 @@ interface ChatMessage {
   sender: string;      // ID отправителя
   message: string;     // Текст сообщения
   timestamp: string;   // Временная метка
+  userNumber?: number; // Номер пользователя
+  userName?: string;   // Имя пользователя
 }
 
 // Создаем Express приложение и HTTP сервер
@@ -42,6 +44,8 @@ const PORT = process.env.PORT || 3001;
 const roomChats = new Map<string, ChatMessage[]>();
 // Хранилище информации о пользователях
 const roomUserCounters = new Map<string, number>();
+// Хранилище имен пользователей
+const roomUserNames = new Map<string, Map<string, string>>();
 
 /**
  * Функция очистки истории чата пустой комнаты
@@ -52,6 +56,7 @@ function cleanupRoom(roomID: string): void {
   if (!room || room.size === 0) {
     roomChats.delete(roomID);
     roomUserCounters.delete(roomID);
+    roomUserNames.delete(roomID);
     console.log(`Chat history cleared for room ${roomID}`);
   }
 }
@@ -73,6 +78,31 @@ function getUserNumber(roomID: string, socketId: string): number {
 }
 
 /**
+ * Получение имени пользователя
+ */
+function getUserName(roomID: string, socketId: string): string {
+  if (!roomUserNames.has(roomID)) {
+    roomUserNames.set(roomID, new Map());
+  }
+  
+  const userNames = roomUserNames.get(roomID)!;
+  const userNumber = getUserNumber(roomID, socketId);
+  
+  return userNames.get(socketId) || `Участник ${userNumber}`;
+}
+
+/**
+ * Установка имени пользователя
+ */
+function setUserName(roomID: string, socketId: string, userName: string): void {
+  if (!roomUserNames.has(roomID)) {
+    roomUserNames.set(roomID, new Map());
+  }
+  
+  roomUserNames.get(roomID)!.set(socketId, userName);
+}
+
+/**
  * Обработчик подключения нового клиента
  * @param socket - клиентский сокет
  */
@@ -83,8 +113,8 @@ io.on('connection', (socket: Socket) => {
    * Обработчик входа в комнату
    * @param config - параметры входа
    */
-  socket.on(ACTIONS.JOIN, (config: { room: string }) => {
-    const { room: roomID } = config;
+  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string }) => {
+    const { room: roomID, userName } = config;
     if (!validate(roomID)) {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
@@ -92,27 +122,39 @@ io.on('connection', (socket: Socket) => {
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
+    // Сохраняем имя пользователя
+    if (userName) {
+      setUserName(roomID, socket.id, userName);
+    } else {
+      setUserName(roomID, socket.id, `Участник ${userNumber}`);
+    }
+
+    const currentUserName = getUserName(roomID, socket.id);
+
     // Отправляем всем участникам информацию о новом пользователе
     clients.forEach(clientID => {
       const clientUserNumber = getUserNumber(roomID, clientID);
+      const clientUserName = getUserName(roomID, clientID);
       
       io.to(clientID).emit(ACTIONS.ADD_PEER, {
         peerID: socket.id,
         createOffer: false,
-        userNumber: userNumber
+        userNumber: userNumber,
+        userName: currentUserName
       });
       
       // Отправляем новому пользователю информацию о существующих участниках
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
         createOffer: true,
-        userNumber: clientUserNumber
+        userNumber: clientUserNumber,
+        userName: clientUserName
       });
     });
 
     // Присоединяемся к комнате
     socket.join(roomID);
-    console.log(`User ${socket.id} joined room ${roomID} as Participant ${userNumber}`);
+    console.log(`User ${socket.id} (${currentUserName}) joined room ${roomID} as Participant ${userNumber}`);
 
     // Если история чата ещё не существует, создаем её
     if (!roomChats.has(roomID)) {
@@ -145,6 +187,11 @@ io.on('connection', (socket: Socket) => {
         });
       });
 
+      // Удаляем имя пользователя при выходе
+      if (roomUserNames.has(roomID)) {
+        roomUserNames.get(roomID)!.delete(socket.id);
+      }
+
       socket.leave(roomID);
       console.log(`User ${socket.id} left room ${roomID}`);
       cleanupRoom(roomID);
@@ -159,18 +206,27 @@ io.on('connection', (socket: Socket) => {
     message: string;
     id?: string;
     timestamp?: string;
+    userName?: string;
   }) => {
-    const { roomID, message, id, timestamp } = data;
+    const { roomID, message, id, timestamp, userName } = data;
 
     if (!validate(roomID)) return;
 
     const userNumber = getUserNumber(roomID, socket.id);
+    const currentUserName = getUserName(roomID, socket.id);
+
+    // Если передано новое имя, обновляем его
+    if (userName && userName !== currentUserName) {
+      setUserName(roomID, socket.id, userName);
+    }
 
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
       sender: socket.id,
       message,
-      timestamp: timestamp || new Date().toISOString()
+      timestamp: timestamp || new Date().toISOString(),
+      userNumber: userNumber,
+      userName: getUserName(roomID, socket.id)
     };
 
     if (!roomChats.has(roomID)) {
@@ -185,10 +241,11 @@ io.on('connection', (socket: Socket) => {
 
     roomMessages.push(chatMessage);
     
-    // Рассылаем всем участникам с номером пользователя
+    // Рассылаем всем участникам с номером пользователя и именем
     io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, {
       ...chatMessage,
-      userNumber: userNumber
+      userNumber: userNumber,
+      userName: getUserName(roomID, socket.id)
     });
   });
 

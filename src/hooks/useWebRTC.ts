@@ -53,7 +53,7 @@ type UseWebRTCReturn = {
   reconnect: () => Promise<void>;
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => void;
-  initializeMedia: (constraints: { audio: boolean; video: boolean }) => Promise<void>;
+  initializeMedia: (constraints: { audio: boolean; video: boolean }, userName?: string) => Promise<void>;
   participantSettings: Record<string, ParticipantSettings>;
   toggleParticipantVideo: (peerId: string) => void;
   toggleParticipantAudio: (peerId: string) => void;
@@ -172,7 +172,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   }, [selectedAudioDevice, selectedVideoDevice]);
 
   // Инициализация медиапотока
-  const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }): Promise<void> => {
+  const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }, userName?: string): Promise<void> => {
     setMediaError(null);
     setIsMediaReady(false);
     
@@ -227,10 +227,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
       });
 
-      // Присоединяемся к комнате
+      // Присоединяемся к комнате с именем пользователя
       if (roomID) {
-        console.log('Joining room:', roomID);
-        socket.emit(ACTIONS.JOIN, { room: roomID });
+        console.log('Joining room:', roomID, 'as:', userName);
+        // Используем тип any для обхода строгой типизации Socket.IO
+        socket.emit(ACTIONS.JOIN, { 
+          room: roomID, 
+          userName: userName 
+        } as any);
       }
       
     } catch (err) {
@@ -239,7 +243,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       // Создаем пустой поток для участников с ошибкой
       localMediaStream.current = new MediaStream();
       addNewClient(LOCAL_VIDEO);
-      if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID });
+      if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID, userName: userName } as any);
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID, mediaState.screen]);
 
@@ -315,7 +319,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, []);
 
-  // Демонстрация экрана - РАБОЧАЯ ВЕРСИЯ
+  // Демонстрация экрана - ИСПРАВЛЕННАЯ ВЕРСИЯ
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
       console.log('Starting screen share...');
@@ -326,21 +330,19 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         screenShareStream.current = null;
       }
 
-      // Улучшенные настройки для аудио с экрана - отключаем обработку звука
+      // Упрощенные настройки для аудио с экрана
       const screenConstraints: MediaStreamConstraints = {
         video: {
           cursor: 'always'
         } as any,
         audio: {
-          // Отключаем все обработки звука для чистого потока
+          // Минимальные настройки для чистого звука
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
-          // Убираем ограничения по sampleRate и channelCount
-          sampleSize: 16,
-          // Позволяем браузеру выбрать оптимальные настройки
-          channelCount: { ideal: 2 },
-          sampleRate: { ideal: 48000 }
+          // Убираем сложные ограничения
+          sampleRate: 48000,
+          channelCount: 2
         }
       };
 
@@ -353,58 +355,29 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       const screenVideoTrack = stream.getVideoTracks()[0];
       const screenAudioTrack = stream.getAudioTracks()[0];
 
-      let audioQualityMonitor: NodeJS.Timeout | null = null;
-
-      // Для аудио трека отключаем любые обработки
+      // Для аудио трека применяем упрощенные настройки
       if (screenAudioTrack) {
-        // Отключаем автоматическую регулировку громкости
-        if ('applyConstraints' in screenAudioTrack) {
-          try {
-            await screenAudioTrack.applyConstraints({
-              autoGainControl: false,
-              noiseSuppression: false,
-              echoCancellation: false
-            });
-          } catch (err) {
-            console.warn('Не удалось применить настройки для аудио трека:', err);
-          }
+        try {
+          // Отключаем все обработки звука
+          await screenAudioTrack.applyConstraints({
+            autoGainControl: false,
+            noiseSuppression: false,
+            echoCancellation: false
+          });
+        } catch (err) {
+          console.warn('Не удалось применить настройки для аудио трека:', err);
         }
         
-        // Отслеживаем состояние трека
-        screenAudioTrack.addEventListener('mute', () => {
-          console.log('Screen share audio muted');
-        });
-        
-        screenAudioTrack.addEventListener('unmute', () => {
-          console.log('Screen share audio unmuted');
-        });
-        
-        // Периодически проверяем и восстанавливаем качество звука
-        audioQualityMonitor = setInterval(() => {
-          if (screenAudioTrack.readyState === 'live' && screenAudioTrack.muted) {
-            console.log('Audio track muted, attempting to restore...');
-            // Попытка восстановить трек
-            stream.removeTrack(screenAudioTrack);
-            stream.addTrack(screenAudioTrack);
-          }
-        }, 5000);
-        
-        // Очистка интервала при окончании трека
+        // Упрощенная обработка состояния трека
         screenAudioTrack.addEventListener('ended', () => {
-          if (audioQualityMonitor) clearInterval(audioQualityMonitor);
+          console.log('Screen share audio ended');
         });
       }
 
       // Обновляем локальное видео для показа демонстрации экрана
       const localVideo = peerMediaElements.current[LOCAL_VIDEO];
       if (localVideo) {
-        // Создаем комбинированный поток для локального отображения
-        const combinedStream = new MediaStream();
-        combinedStream.addTrack(screenVideoTrack);
-        if (screenAudioTrack) {
-          combinedStream.addTrack(screenAudioTrack);
-        }
-        localVideo.srcObject = combinedStream;
+        localVideo.srcObject = stream;
         localVideo.play().catch(e => console.error('Screen share video play error:', e));
       }
 
@@ -414,47 +387,31 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           const senders = pc.getSenders();
           console.log(`Updating peer ${peerID} with screen share, ${senders.length} senders`);
 
-          // Создаем новый поток для демонстрации экрана
-          const screenStream = new MediaStream();
-          screenStream.addTrack(screenVideoTrack);
-          
-          // Если есть аудио с экрана, добавляем его
-          if (screenAudioTrack) {
-            screenStream.addTrack(screenAudioTrack);
-          }
-
-          // Сохраняем оригинальные аудио треки из локального потока
-          const originalAudioTracks = localMediaStream.current?.getAudioTracks() || [];
-
           // Заменяем ВСЕ существующие треки
           for (const sender of senders) {
             if (sender.track) {
               if (sender.track.kind === 'video') {
                 console.log(`Replacing video track for peer ${peerID}`);
                 await sender.replaceTrack(screenVideoTrack);
-              } else if (sender.track.kind === 'audio') {
-                // Для аудио: если есть аудио с экрана, используем его, иначе оставляем микрофон
-                if (screenAudioTrack) {
-                  console.log(`Replacing audio track with screen audio for peer ${peerID}`);
-                  await sender.replaceTrack(screenAudioTrack);
-                }
-                // Если нет аудио с экрана, оставляем оригинальный микрофон
+              } else if (sender.track.kind === 'audio' && screenAudioTrack) {
+                console.log(`Replacing audio track with screen audio for peer ${peerID}`);
+                await sender.replaceTrack(screenAudioTrack);
               }
             }
           }
 
           // Если не было отправителя для видео, добавляем новый
           const hasVideoSender = senders.some(s => s.track?.kind === 'video');
-          if (!hasVideoSender) {
+          if (!hasVideoSender && screenVideoTrack) {
             console.log(`Adding new video track for peer ${peerID}`);
-            pc.addTrack(screenVideoTrack, screenStream);
+            pc.addTrack(screenVideoTrack, stream);
           }
 
-          // Если не было отправителя для аудио и есть аудио с экрана, добавляем новый
+          // Если не было отправителя для аудио, добавляем новый
           const hasAudioSender = senders.some(s => s.track?.kind === 'audio');
           if (!hasAudioSender && screenAudioTrack) {
             console.log(`Adding new audio track for peer ${peerID}`);
-            pc.addTrack(screenAudioTrack, screenStream);
+            pc.addTrack(screenAudioTrack, stream);
           }
 
           // Создаем новый offer для принудительного обновления соединения
@@ -464,13 +421,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             offerToReceiveVideo: true
           });
           
-          // Улучшенная обработка для Apple устройств
-          const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-          if (isSafari) {
-            await pc.setLocalDescription(offer);
-          } else {
-            await pc.setLocalDescription(offer);
-          }
+          await pc.setLocalDescription(offer);
           
           socket.emit(ACTIONS.RELAY_SDP, {
             peerID,
@@ -489,17 +440,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       // Обработчик окончания демонстрации экрана
       screenVideoTrack.addEventListener('ended', () => {
         console.log('Screen share ended by user');
-        if (audioQualityMonitor) clearInterval(audioQualityMonitor);
         stopScreenShare();
       });
-
-      // Обработчик для аудио трека
-      if (screenAudioTrack) {
-        screenAudioTrack.addEventListener('ended', () => {
-          console.log('Screen share audio ended');
-          if (audioQualityMonitor) clearInterval(audioQualityMonitor);
-        });
-      }
 
     } catch (err) {
       console.error('Ошибка демонстрации экрана:', err);
@@ -899,11 +841,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
   // Подписка на события Socket.IO
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer }: { 
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName }: { 
       peerID: string; 
       createOffer: boolean;
+      userNumber?: number;
+      userName?: string;
     }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer);
+      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName);
       setupPeerConnection(peerID, createOffer);
     };
 
@@ -978,6 +922,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       message: string;
       sender: string;
       timestamp: string;
+      userNumber?: number;
+      userName?: string;
     }) => {
       addChatMessage({
         id: msg.id,

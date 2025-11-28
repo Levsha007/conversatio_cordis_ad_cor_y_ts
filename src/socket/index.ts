@@ -44,7 +44,12 @@ const options: CustomSocketOptions = {
  * Типы событий, которые может получать клиент от сервера
  */
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { peerID: string, createOffer: boolean, userNumber?: number }) => void;
+  [ACTIONS.ADD_PEER]: (params: { 
+    peerID: string, 
+    createOffer: boolean, 
+    userNumber?: number,
+    userName?: string 
+  }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
@@ -64,7 +69,10 @@ interface ServerToClientEvents {
  * Типы событий, которые может отправлять клиент серверу
  */
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { room: string }) => void;
+  [ACTIONS.JOIN]: (params: { 
+    room: string;
+    userName?: string;
+  }) => void;
   [ACTIONS.RELAY_ICE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.RELAY_SDP]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
   [ACTIONS.CHAT_MESSAGE]: (params: { 
