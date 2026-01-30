@@ -35,6 +35,7 @@ interface ChatMessage {
 interface ParticipantSettings {
   videoEnabled: boolean;
   audioEnabled: boolean;
+  hasMedia: boolean;
 }
 
 type UseWebRTCReturn = {
@@ -208,11 +209,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       // Обновляем состояние медиа
       setMediaState(prev => ({
         ...prev,
-        audio: constraints.audio && stream !== null,
-        video: constraints.video && stream !== null
+        audio: constraints.audio && stream !== null && stream.getAudioTracks().length > 0,
+        video: constraints.video && stream !== null && stream.getVideoTracks().length > 0
       }));
 
-      // Добавляем локальное видео
+      // Добавляем локальное видео ВСЕГДА
       addNewClient(LOCAL_VIDEO, () => {
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
         if (localVideo) {
@@ -227,13 +228,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
       });
 
-      // Присоединяемся к комнате с именем пользователя
+      // Присоединяемся к комнате с именем пользователя и флагом наличия медиа
       if (roomID) {
-        console.log('Joining room:', roomID, 'as:', userName);
+        console.log('Joining room:', roomID, 'as:', userName, 'with media:', constraints.audio || constraints.video);
         // Используем тип any для обхода строгой типизации Socket.IO
         socket.emit(ACTIONS.JOIN, { 
           room: roomID, 
-          userName: userName 
+          userName: userName,
+          hasMedia: constraints.audio || constraints.video
         } as any);
       }
       
@@ -243,7 +245,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       // Создаем пустой поток для участников с ошибкой
       localMediaStream.current = new MediaStream();
       addNewClient(LOCAL_VIDEO);
-      if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID, userName: userName } as any);
+      if (roomID) socket.emit(ACTIONS.JOIN, { 
+        room: roomID, 
+        userName: userName,
+        hasMedia: false
+      } as any);
     }
   }, [getMediaConstraints, enumerateDevices, addNewClient, roomID, mediaState.screen]);
 
@@ -841,14 +847,36 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
   // Подписка на события Socket.IO
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName }: { 
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName, hasMedia = true }: { 
       peerID: string; 
       createOffer: boolean;
       userNumber?: number;
       userName?: string;
+      hasMedia?: boolean;
     }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName);
-      setupPeerConnection(peerID, createOffer);
+      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName, 'hasMedia:', hasMedia);
+      
+      // Всегда добавляем участника в список
+      addNewClient(peerID, () => {
+        if (hasMedia) {
+          // Если у участника есть медиа, устанавливаем соединение
+          setupPeerConnection(peerID, createOffer);
+        } else {
+          // Если у участника нет медиа, просто добавляем в список
+          console.log(`Participant ${peerID} added without media`);
+        }
+      });
+
+      // Обновляем настройки участника
+      setParticipantSettings(prev => ({
+        ...prev,
+        [peerID]: {
+          ...prev[peerID],
+          hasMedia: hasMedia !== false,
+          videoEnabled: true,
+          audioEnabled: true
+        }
+      }));
     };
 
     const handleSessionDescription = async ({ 
@@ -955,7 +983,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         socket.off(action as any, handler);
       });
     };
-  }, [setupPeerConnection, updateClients, addChatMessage, roomID]);
+  }, [setupPeerConnection, updateClients, addChatMessage, roomID, addNewClient]);
 
   // Инициализация настроек участников
   useEffect(() => {
@@ -966,7 +994,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
             ...prev,
             [clientId]: {
               videoEnabled: true,
-              audioEnabled: true
+              audioEnabled: true,
+              hasMedia: true
             }
           }));
         }

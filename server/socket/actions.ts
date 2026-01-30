@@ -55,6 +55,8 @@ export type JoinAction = {
   type: typeof ACTIONS.JOIN;
   room: string; // ID комнаты
   userId?: string; // Опциональный ID пользователя
+  userName?: string; // Опциональное имя пользователя
+  hasMedia?: boolean; // Флаг наличия медиаустройств
 };
 
 // Действие передачи ICE кандидата
@@ -100,6 +102,7 @@ interface ChatMessage {
   message: string; // Текст сообщения
   timestamp: string; // Временная метка
   userNumber?: number; // Номер пользователя
+  userName?: string; // Имя пользователя
 }
 
 // Сообщение о прикреплённом файле
@@ -112,7 +115,13 @@ interface FileAttachment {
 
 // События от сервера к клиенту
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { peerID: string; createOffer: boolean; userNumber?: number }) => void;
+  [ACTIONS.ADD_PEER]: (params: { 
+    peerID: string; 
+    createOffer: boolean; 
+    userNumber?: number;
+    userName?: string;
+    hasMedia?: boolean;
+  }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string; iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string; sessionDescription: RTCSessionDescriptionInit }) => void;
@@ -123,7 +132,11 @@ interface ServerToClientEvents {
 
 // События от клиента к серверу
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { room: string }) => void;
+  [ACTIONS.JOIN]: (params: { 
+    room: string;
+    userName?: string;
+    hasMedia?: boolean;
+  }) => void;
   [ACTIONS.RELAY_ICE]: (params: { peerID: string; iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.RELAY_SDP]: (params: { peerID: string; sessionDescription: RTCSessionDescriptionInit }) => void;
   [ACTIONS.CHAT_MESSAGE]: (params: {
@@ -131,6 +144,7 @@ interface ClientToServerEvents {
     message: string;
     id: string;
     timestamp: string;
+    userName?: string;
   }) => void;
   [ACTIONS.REQUEST_CHAT_HISTORY]: (params: { roomID: string }) => void;
   [ACTIONS.FILE_ATTACHED]: (params: {

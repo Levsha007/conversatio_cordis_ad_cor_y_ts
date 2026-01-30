@@ -217,6 +217,19 @@
   opacity: 0.8;
 }
 
+/* Индикатор отсутствия медиаустройств */
+.noMediaIndicator {
+  color: #ff9800;
+  margin-left: 5px;
+}
+
+/* Подсказка в выборе устройств */
+.deviceHint {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 20px;
+}
+
 /* Стили для формы выбора устройств в стиле главной страницы */
 .deviceSelectionOverlay {
   position: fixed;

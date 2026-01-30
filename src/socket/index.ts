@@ -48,7 +48,8 @@ interface ServerToClientEvents {
     peerID: string, 
     createOffer: boolean, 
     userNumber?: number,
-    userName?: string 
+    userName?: string,
+    hasMedia?: boolean
   }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
@@ -72,6 +73,7 @@ interface ClientToServerEvents {
   [ACTIONS.JOIN]: (params: { 
     room: string;
     userName?: string;
+    hasMedia?: boolean;
   }) => void;
   [ACTIONS.RELAY_ICE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.RELAY_SDP]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;

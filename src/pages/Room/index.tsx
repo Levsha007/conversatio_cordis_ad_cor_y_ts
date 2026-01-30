@@ -122,7 +122,8 @@ const DeviceSelection: React.FC<{
           </div>
         </div>
 
-        <p>Выберите устройства для начала видеоконференции:</p>
+        <p>Выберите устройства для видеоконференции:</p>
+        <p className={styles.deviceHint}>Вы можете войти и без устройств - для участия в чате</p>
         
         <div className={styles.deviceOptions}>
           <label className={styles.deviceOption}>
@@ -150,6 +151,19 @@ const DeviceSelection: React.FC<{
               Камера
             </span>
           </label>
+          
+          <label className={styles.deviceOption}>
+            <input
+              type="checkbox"
+              checked={!settings.audio && !settings.video}
+              onChange={() => setSettings({ audio: false, video: false })}
+            />
+            <span className={styles.checkbox}></span>
+            <span className={styles.deviceLabel}>
+              <span className={styles.deviceIcon}>💬</span>
+              Только чат (без устройств)
+            </span>
+          </label>
         </div>
 
         <div className={styles.deviceSelectionButtons}>
@@ -157,12 +171,13 @@ const DeviceSelection: React.FC<{
             onClick={handleJoin}
             className={styles.joinButton}
           >
-            Войти в комнату
+            {settings.audio || settings.video ? 'Войти с устройствами' : 'Войти без устройств'}
           </button>
         </div>
 
         <div className={styles.deviceSelectionHint}>
-          <p>💡 Вы можете изменить настройки позже в панели управления</p>
+          <p>💡 Вы можете войти без устройств и участвовать в чате, слушая других участников</p>
+          <p>💡 Устройства можно включить позже в панели настроек</p>
         </div>
       </div>
     </div>
@@ -256,13 +271,14 @@ const Room: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isCopied, setIsCopied] = useState(false);
-  const copyTimeout = useRef<NodeJS.Timeout | null>(null);
+  const copyTimeout = useRef<number | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [participantCount, setParticipantCount] = useState(1);
   const [userName, setUserName] = useState('');
   const [showNameInput, setShowNameInput] = useState(false);
+  const [participantsInfo, setParticipantsInfo] = useState<Record<string, { hasMedia: boolean }>>({});
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -459,13 +475,14 @@ const Room: React.FC = () => {
 
   // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName }: { 
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName, hasMedia = true }: { 
       peerID: string; 
       createOffer: boolean;
       userNumber?: number;
       userName?: string;
+      hasMedia?: boolean;
     }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName);
+      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName, 'hasMedia:', hasMedia);
       
       if (userNumber) {
         setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
@@ -473,6 +490,12 @@ const Room: React.FC = () => {
       if (userName) {
         setUserNames(prev => ({ ...prev, [peerID]: userName }));
       }
+      
+      // Сохраняем информацию о наличии медиа
+      setParticipantsInfo(prev => ({
+        ...prev,
+        [peerID]: { hasMedia: hasMedia !== false }
+      }));
     };
 
     const handleRemovePeer = ({ peerID }: { peerID: string }) => {
@@ -485,6 +508,11 @@ const Room: React.FC = () => {
         const newNames = { ...prev };
         delete newNames[peerID];
         return newNames;
+      });
+      setParticipantsInfo(prev => {
+        const newInfo = { ...prev };
+        delete newInfo[peerID];
+        return newInfo;
       });
     };
 
@@ -683,9 +711,10 @@ const Room: React.FC = () => {
             } ${!participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''}`}
           />
           
-          {/* Плейсхолдер для участников без видео */}
+          {/* Плейсхолдер для участников без видео или без медиа */}
           {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject || 
-            (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0)) && (
+            (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0 ||
+            !participantsInfo[clientID]?.hasMedia)) && (
             <div className={styles.participantPlaceholder}>
               <div className={styles.participantAvatar}>
                 {getUserDisplayName(clientID).charAt(0)}
@@ -694,7 +723,7 @@ const Room: React.FC = () => {
                 {getUserDisplayName(clientID)}
               </div>
               <div className={styles.participantStatus}>
-                📹 Нет видео
+                {!participantsInfo[clientID]?.hasMedia ? '📵 Без устройств' : '📹 Нет видео'}
               </div>
             </div>
           )}
@@ -711,7 +740,7 @@ const Room: React.FC = () => {
             </button>
 
             {/* Кнопки управления для других участников */}
-            {clientID !== LOCAL_VIDEO && (
+            {clientID !== LOCAL_VIDEO && participantsInfo[clientID]?.hasMedia && (
               <div className={styles.participantControls}>
                 <button
                   className={`${styles.participantControlButton} ${
@@ -744,11 +773,16 @@ const Room: React.FC = () => {
             {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
             {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
             
+            {/* Индикатор отсутствия медиа */}
+            {!participantsInfo[clientID]?.hasMedia && clientID !== LOCAL_VIDEO && (
+              <span className={styles.noMediaIndicator}>📵</span>
+            )}
+            
             {/* Индикаторы отключенного контента */}
-            {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
+            {!participantSettings[clientID]?.videoEnabled && participantsInfo[clientID]?.hasMedia && clientID !== LOCAL_VIDEO && (
               <span className={styles.videoDisabledIndicator}>📹❌</span>
             )}
-            {!participantSettings[clientID]?.audioEnabled && clientID !== LOCAL_VIDEO && (
+            {!participantSettings[clientID]?.audioEnabled && participantsInfo[clientID]?.hasMedia && clientID !== LOCAL_VIDEO && (
               <span className={styles.audioDisabledIndicator}>🎤❌</span>
             )}
           </div>
