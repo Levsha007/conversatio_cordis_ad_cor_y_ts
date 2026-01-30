@@ -81,7 +81,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const [clients, updateClients] = useStateWithCallback<string[]>([]);
   const [mediaError, setMediaError] = useState<Error | null>(null);
   const [isMediaReady, setIsMediaReady] = useState(false);
-  const [webRTCStatus, setWebRTCStatus] = useState<WebRTCStatus>(checkWebRTCAvailability());
+  const [webRTCStatus] = useState<WebRTCStatus>(checkWebRTCAvailability());
   const [mediaState, setMediaState] = useState<MediaState>({ 
     audio: false, 
     video: false, 

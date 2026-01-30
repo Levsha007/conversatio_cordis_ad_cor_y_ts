@@ -271,7 +271,6 @@ const Room: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isCopied, setIsCopied] = useState(false);
-  const copyTimeout = useRef<number | null>(null);
   const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -376,12 +375,11 @@ const Room: React.FC = () => {
    */
   const handleCopyLink = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setIsCopied(true);
-      if (copyTimeout.current) clearTimeout(copyTimeout.current);
-      copyTimeout.current = setTimeout(() => setIsCopied(false), 2000);
+        await navigator.clipboard.writeText(window.location.href);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
-      console.error('Ошибка при копировании ссылки:', err);
+        console.error('Ошибка при копировании ссылки:', err);
     }
   }, []);
 
