@@ -217,19 +217,6 @@
   opacity: 0.8;
 }
 
-/* Индикатор отсутствия медиаустройств */
-.noMediaIndicator {
-  color: #ff9800;
-  margin-left: 5px;
-}
-
-/* Подсказка в выборе устройств */
-.deviceHint {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 20px;
-}
-
 /* Стили для формы выбора устройств в стиле главной страницы */
 .deviceSelectionOverlay {
   position: fixed;
@@ -417,10 +404,18 @@
   box-shadow: 0 8px 25px rgba(179, 0, 0, 0.3);
 }
 
-.deviceSelectionModal .joinButton:hover {
+.deviceSelectionModal .joinButton:hover:not(:disabled) {
   background: linear-gradient(135deg, #cc0000 0%, #990000 100%);
   transform: translateY(-2px);
   box-shadow: 0 12px 35px rgba(179, 0, 0, 0.4);
+}
+
+.deviceSelectionModal .joinButton:disabled {
+  background: linear-gradient(135deg, #444444 0%, #666666 100%);
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
 }
 
 .deviceSelectionHint {
@@ -924,28 +919,6 @@
   background: white;
 }
 
-/* Стили для счетчика участников */
-.participantCounter {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 15px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.counterLabel {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.8);
-  margin-bottom: 5px;
-}
-
-.counterValue {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #b30000;
-}
-
 /* Стили для настроек имени */
 .nameSettings {
   background: rgba(255, 255, 255, 0.05);
@@ -1132,11 +1105,13 @@
   width: 100vw !important;
   height: 100vh !important;
   z-index: 1000;
-  background: #000;
+  background: #000 !important;
+  border: none !important;
+  margin: 0 !important;
 }
 
 .videoWrapperFullscreen .video {
-  object-fit: contain;
+  object-fit: contain !important;
   width: 100% !important;
   height: 100% !important;
 }
@@ -1184,6 +1159,95 @@
   }
   to {
     transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Контейнер для уведомлений */
+.notificationsContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+  max-width: 300px;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* Общие стили уведомлений */
+.notification {
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 12px;
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: slideInRight 0.3s ease-out;
+  pointer-events: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: 300px;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.notification.fadeOut {
+  opacity: 0;
+}
+
+/* Иконка уведомления */
+.notificationIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* Контент уведомления */
+.notificationContent {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Текст уведомления */
+.notificationMessage {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+/* Время уведомления */
+.notificationTime {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Типы уведомлений */
+.notificationJoin {
+  border-left: 4px solid #4CAF50;
+}
+
+.notificationLeave {
+  border-left: 4px solid #f44336;
+}
+
+.notificationSystem {
+  border-left: 4px solid #2196F3;
+}
+
+/* Анимации для уведомлений */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
     opacity: 1;
   }
 }
@@ -1382,6 +1446,76 @@
     padding: 10px 14px;
   }
 
+  /* Контейнер для уведомлений на мобильных */
+  .notificationsContainer {
+    top: 10px;
+    right: 10px;
+    max-width: 250px;
+  }
+  
+  .notification {
+    padding: 10px;
+    max-width: 250px;
+  }
+  
+  .notificationMessage {
+    font-size: 13px;
+  }
+  
+  .notificationIcon {
+    font-size: 18px;
+  }
+
+  /* Исправление полноэкранного режима на мобильных устройствах */
+  .videoWrapperFullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 1000;
+    background: #000 !important;
+    border: none !important;
+    margin: 0 !important;
+  }
+
+  .videoWrapperFullscreen .video {
+    object-fit: contain !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .videoWrapperFullscreen .userLabel {
+    padding: 12px 16px;
+    font-size: 14px;
+    bottom: env(safe-area-inset-bottom, 10px);
+  }
+  
+  .videoWrapperFullscreen .videoTopControls {
+    top: env(safe-area-inset-top, 10px);
+    left: 10px;
+    right: 10px;
+  }
+  
+  .exitFullscreenButton {
+    position: fixed;
+    top: env(safe-area-inset-top, 10px);
+    right: 10px;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   /* Улучшения для очень маленьких экранов */
   @media (max-width: 360px) {
     .controls {
@@ -1401,6 +1535,20 @@
     .videoWrapper {
       height: 22vh !important;
       min-height: 180px;
+    }
+    
+    .videoWrapperFullscreen .userLabel {
+      font-size: 12px;
+      padding: 8px 12px;
+    }
+    
+    .exitFullscreenButton {
+      font-size: 12px;
+      padding: 10px 14px;
+    }
+    
+    .notificationsContainer {
+      max-width: 220px;
     }
   }
 }
@@ -1430,6 +1578,18 @@
   .controls {
     bottom: 8px;
   }
+  
+  .videoWrapperFullscreen {
+    height: 100vh !important;
+  }
+  
+  .videoWrapperFullscreen .video {
+    object-fit: contain !important;
+  }
+  
+  .videoWrapperFullscreen .userLabel {
+    bottom: env(safe-area-inset-bottom, 10px);
+  }
 }
 
 /* Улучшения для планшетов */
@@ -1449,88 +1609,14 @@
   }
 }
 
-/* Исправления для полноэкранного режима на мобильных устройствах */
-.videoWrapperFullscreen {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 1000;
-  background: #000;
-}
-
-.videoWrapperFullscreen .video {
-  object-fit: contain;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Для мобильных устройств с вертикальной ориентацией */
-@media (max-width: 767px) and (orientation: portrait) {
-  .videoWrapperFullscreen {
-    height: 100vh !important;
-  }
-  
-  .videoWrapperFullscreen .video {
-    object-fit: contain;
-  }
-}
-
-/* Для мобильных устройств с горизонтальной ориентацией */
-@media (max-width: 767px) and (orientation: landscape) {
-  .videoWrapperFullscreen {
-    height: 100vh !important;
-  }
-  
-  .videoWrapperFullscreen .video {
-    object-fit: contain;
-  }
-}
-
-/* Улучшения для очень маленьких экранов */
-@media (max-width: 360px) {
-  .videoWrapperFullscreen .userLabel {
-    font-size: 11px;
-    padding: 6px 10px;
-  }
-  
-  .videoWrapperFullscreen .videoTopControls {
-    top: 5px;
-    left: 5px;
-    right: 5px;
-  }
-}
-
-/* Дополнительные стили для улучшения отображения на мобильных */
-.videoWrapper {
-  transition: all 0.3s ease;
-}
-
-.videoWrapperFullscreen {
-  animation: expandToFullscreen 0.3s ease-out;
-}
-
+/* Анимация для перехода в полноэкранный режим */
 @keyframes expandToFullscreen {
   from {
     transform: scale(0.9);
-    opacity: 0.8;
+    opacity: 0.7;
   }
   to {
     transform: scale(1);
     opacity: 1;
-  }
-}
-
-/* Улучшение кнопки выхода из полноэкранного режима для мобильных */
-@media (max-width: 767px) {
-  .exitFullscreenButton {
-    top: 10px;
-    right: 10px;
-    padding: 10px 15px;
-    font-size: 12px;
-    z-index: 1001;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 }
