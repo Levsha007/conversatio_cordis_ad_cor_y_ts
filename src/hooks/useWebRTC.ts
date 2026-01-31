@@ -38,6 +38,14 @@ interface ParticipantSettings {
   hasMedia: boolean;
 }
 
+interface AddPeerParams {
+  peerID: string;
+  createOffer: boolean;
+  userNumber?: number;
+  userName?: string;
+  hasMedia?: boolean;
+}
+
 type UseWebRTCReturn = {
   clients: string[];
   provideMediaRef: (id: string, node: HTMLVideoElement | null) => void;
@@ -81,7 +89,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const [clients, updateClients] = useStateWithCallback<string[]>([]);
   const [mediaError, setMediaError] = useState<Error | null>(null);
   const [isMediaReady, setIsMediaReady] = useState(false);
-  const [webRTCStatus] = useState<WebRTCStatus>(checkWebRTCAvailability());
+  const [webRTCStatus, setWebRTCStatus] = useState<WebRTCStatus>(checkWebRTCAvailability());
   const [mediaState, setMediaState] = useState<MediaState>({ 
     audio: false, 
     video: false, 
@@ -181,12 +189,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       const { isSupported, errors } = checkWebRTCAvailability();
       if (!isSupported) throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
 
-      // Останавливаем предыдущие потоки (кроме демонстрации экрана)
-      if (localMediaStream.current && !mediaState.screen) {
-        localMediaStream.current.getTracks().forEach(track => track.stop());
-        localMediaStream.current = null;
-      }
-
+      // Создаем локальный медиапоток ВСЕГДА, даже если нет устройств
       let stream: MediaStream | null = null;
       
       if (constraints.audio || constraints.video) {
@@ -195,11 +198,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           await enumerateDevices();
         } catch (err) {
           console.warn('Не удалось получить медиаустройства:', err);
-          // Создаем пустой поток для участников без устройств
+          // Создаем пустой поток, но всё равно продолжаем
           stream = new MediaStream();
         }
       } else {
-        // Создаем пустой поток для участников без устройств
+        // Для участников без устройств создаем пустой поток
         stream = new MediaStream();
       }
 
@@ -207,51 +210,50 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       localMediaStream.current = stream;
 
       // Обновляем состояние медиа
+      const hasAudio = constraints.audio && stream !== null && stream.getAudioTracks().length > 0;
+      const hasVideo = constraints.video && stream !== null && stream.getVideoTracks().length > 0;
+      
       setMediaState(prev => ({
         ...prev,
-        audio: constraints.audio && stream !== null && stream.getAudioTracks().length > 0,
-        video: constraints.video && stream !== null && stream.getVideoTracks().length > 0
+        audio: hasAudio,
+        video: hasVideo
       }));
 
-      // Добавляем локальное видео ВСЕГДА
+      // Добавляем локальное видео
       addNewClient(LOCAL_VIDEO, () => {
         const localVideo = peerMediaElements.current[LOCAL_VIDEO];
-        if (localVideo) {
-          // Показываем демонстрацию экрана если она активна, иначе обычный поток
-          const activeStream = mediaState.screen && screenShareStream.current ? 
-            screenShareStream.current : stream;
-          localVideo.srcObject = activeStream;
+        if (localVideo && stream) {
+          localVideo.srcObject = stream;
           localVideo.volume = 0;
-          if (activeStream) {
-            localVideo.play().catch(e => console.error('Local video play error:', e));
-          }
+          localVideo.play().catch(e => console.error('Local video play error:', e));
         }
       });
 
-      // Присоединяемся к комнате с именем пользователя и флагом наличия медиа
+      // Присоединяемся к комнате
       if (roomID) {
-        console.log('Joining room:', roomID, 'as:', userName, 'with media:', constraints.audio || constraints.video);
-        // Используем тип any для обхода строгой типизации Socket.IO
+        console.log('Joining room:', roomID, 'as:', userName, 'with media:', hasAudio || hasVideo);
         socket.emit(ACTIONS.JOIN, { 
           room: roomID, 
           userName: userName,
-          hasMedia: constraints.audio || constraints.video
+          hasMedia: hasAudio || hasVideo
         } as any);
       }
       
     } catch (err) {
       console.error('Ошибка инициализации медиа:', err);
       setMediaError(err as Error);
-      // Создаем пустой поток для участников с ошибкой
+      // Создаем пустой поток
       localMediaStream.current = new MediaStream();
       addNewClient(LOCAL_VIDEO);
-      if (roomID) socket.emit(ACTIONS.JOIN, { 
-        room: roomID, 
-        userName: userName,
-        hasMedia: false
-      } as any);
+      if (roomID) {
+        socket.emit(ACTIONS.JOIN, { 
+          room: roomID, 
+          userName: userName,
+          hasMedia: false
+        } as any);
+      }
     }
-  }, [getMediaConstraints, enumerateDevices, addNewClient, roomID, mediaState.screen]);
+  }, [getMediaConstraints, enumerateDevices, addNewClient, roomID]);
 
   // Остановка демонстрации экрана
   const stopScreenShare = useCallback((): void => {
@@ -647,6 +649,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
     console.log(`Setting up peer connection for ${peerID}, createOffer: ${createOffer}`);
 
+    // Убедимся, что у нас есть локальный поток (даже пустой)
+    if (!localMediaStream.current) {
+      localMediaStream.current = new MediaStream();
+    }
+
+    const activeStream = mediaState.screen && screenShareStream.current ? 
+      screenShareStream.current : localMediaStream.current;
+
     // Улучшенная конфигурация для Apple устройств
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const pcConfig: RTCConfiguration = {
@@ -665,10 +675,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     const pc = new RTCPeerConnection(pcConfig);
     peerConnections.current[peerID] = pc;
 
-    // Добавляем треки из активного потока
-    const activeStream = mediaState.screen && screenShareStream.current ? 
-      screenShareStream.current : localMediaStream.current;
-      
+    // Добавляем треки из активного потока, даже если они пустые
     if (activeStream && activeStream.getTracks().length > 0) {
       console.log(`Adding ${activeStream.getTracks().length} tracks from active stream to peer ${peerID}`);
       activeStream.getTracks().forEach(track => {
@@ -682,7 +689,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         }
       });
     } else {
-      console.log(`No active tracks available for peer ${peerID}`);
+      console.log(`No active tracks available for peer ${peerID}, creating empty connection`);
     }
 
     // Обработка ICE кандидатов
@@ -847,27 +854,22 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
   // Подписка на события Socket.IO
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName, hasMedia = true }: { 
-      peerID: string; 
-      createOffer: boolean;
-      userNumber?: number;
-      userName?: string;
-      hasMedia?: boolean;
-    }) => {
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName, hasMedia = true }: AddPeerParams) => {
       console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName, 'hasMedia:', hasMedia);
       
-      // Всегда добавляем участника в список
+      if (hasMedia) {
+        setupPeerConnection(peerID, createOffer);
+      }
+      
+      // ВСЕГДА добавляем клиента в список, даже без медиа
       addNewClient(peerID, () => {
-        if (hasMedia) {
-          // Если у участника есть медиа, устанавливаем соединение
-          setupPeerConnection(peerID, createOffer);
-        } else {
-          // Если у участника нет медиа, просто добавляем в список
+        // Для участников без медиа просто добавляем в список
+        if (!hasMedia) {
           console.log(`Participant ${peerID} added without media`);
         }
       });
 
-      // Обновляем настройки участника
+      // Сохраняем настройки участника
       setParticipantSettings(prev => ({
         ...prev,
         [peerID]: {
@@ -939,10 +941,26 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       if (pc) {
         pc.close();
         delete peerConnections.current[peerID];
-        delete peerMediaElements.current[peerID];
-        updateClients(list => list.filter(c => c !== peerID));
-        console.log(`Peer ${peerID} removed`);
       }
+      
+      // Удаляем медиа элемент
+      const element = peerMediaElements.current[peerID];
+      if (element) {
+        element.srcObject = null;
+        delete peerMediaElements.current[peerID];
+      }
+      
+      // Удаляем из списка клиентов
+      updateClients(list => list.filter(c => c !== peerID));
+      
+      // Удаляем из настроек
+      setParticipantSettings(prev => {
+        const newSettings = { ...prev };
+        delete newSettings[peerID];
+        return newSettings;
+      });
+      
+      console.log(`Peer ${peerID} removed`);
     };
 
     const handleChatMessage = (msg: {
@@ -962,12 +980,18 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       });
     };
 
+    const handleUserNameUpdated = ({ peerID, userName }: { peerID: string; userName: string }) => {
+      console.log(`User ${peerID} updated name to ${userName}`);
+      // Обновление имени будет обрабатываться в Room компоненте
+    };
+
     const handlers = {
       [ACTIONS.ADD_PEER]: handleAddPeer,
       [ACTIONS.SESSION_DESCRIPTION]: handleSessionDescription,
       [ACTIONS.ICE_CANDIDATE]: handleIceCandidate,
       [ACTIONS.REMOVE_PEER]: handleRemovePeer,
-      [ACTIONS.CHAT_MESSAGE]: handleChatMessage
+      [ACTIONS.CHAT_MESSAGE]: handleChatMessage,
+      'user-name-updated': handleUserNameUpdated
     };
 
     Object.entries(handlers).forEach(([action, handler]) => {
@@ -983,7 +1007,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         socket.off(action as any, handler);
       });
     };
-  }, [setupPeerConnection, updateClients, addChatMessage, roomID, addNewClient]);
+  }, [setupPeerConnection, updateClients, addChatMessage, roomID]);
 
   // Инициализация настроек участников
   useEffect(() => {

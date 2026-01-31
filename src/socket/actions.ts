@@ -128,6 +128,7 @@ interface ServerToClientEvents {
   [ACTIONS.CHAT_MESSAGE]: (params: ChatMessage) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: ChatMessage[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  'user-name-updated': (params: { peerID: string; userName: string }) => void;
 }
 
 // События от клиента к серверу
@@ -154,6 +155,7 @@ interface ClientToServerEvents {
     timestamp?: string;
   }) => void;
   [ACTIONS.LEAVE]: () => void;
+  'update-user-name': (params: { roomID: string; userName: string }) => void;
 }
 
 // Экспортируем интерфейсы для использования в других частях приложения

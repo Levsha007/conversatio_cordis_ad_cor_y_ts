@@ -64,6 +64,7 @@ interface ServerToClientEvents {
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  'user-name-updated': (params: { peerID: string; userName: string }) => void;
 }
 
 /**
@@ -92,6 +93,7 @@ interface ClientToServerEvents {
     timestamp?: string;
   }) => void;
   [ACTIONS.LEAVE]: () => void;
+  'update-user-name': (params: { roomID: string; userName: string }) => void;
 }
 
 /**

@@ -46,9 +46,7 @@ const roomChats = new Map<string, ChatMessage[]>();
 const roomUserCounters = new Map<string, number>();
 // Хранилище имен пользователей
 const roomUserNames = new Map<string, Map<string, string>>();
-// Хранилище информации о наличии медиа у пользователей
-const roomUserHasMedia = new Map<string, Map<string, boolean>>();
-// Хранилище всех участников комнат (включая без медиа)
+// Хранилище всех участников комнаты (включая без устройств)
 const roomParticipants = new Map<string, Set<string>>();
 
 /**
@@ -61,7 +59,6 @@ function cleanupRoom(roomID: string): void {
     roomChats.delete(roomID);
     roomUserCounters.delete(roomID);
     roomUserNames.delete(roomID);
-    roomUserHasMedia.delete(roomID);
     roomParticipants.delete(roomID);
     console.log(`Chat history cleared for room ${roomID}`);
   }
@@ -78,8 +75,8 @@ function getUserNumber(roomID: string, socketId: string): number {
   const room = io.sockets.adapter.rooms.get(roomID);
   if (!room) return 1;
   
-  const participants = Array.from(roomParticipants.get(roomID) || []);
-  const userIndex = participants.indexOf(socketId);
+  const clients = Array.from(room);
+  const userIndex = clients.indexOf(socketId);
   return userIndex + 1;
 }
 
@@ -109,29 +106,7 @@ function setUserName(roomID: string, socketId: string, userName: string): void {
 }
 
 /**
- * Установка флага наличия медиа у пользователя
- */
-function setUserHasMedia(roomID: string, socketId: string, hasMedia: boolean): void {
-  if (!roomUserHasMedia.has(roomID)) {
-    roomUserHasMedia.set(roomID, new Map());
-  }
-  
-  roomUserHasMedia.get(roomID)!.set(socketId, hasMedia);
-}
-
-/**
- * Получение флага наличия медиа у пользователя
- */
-function getUserHasMedia(roomID: string, socketId: string): boolean {
-  if (!roomUserHasMedia.has(roomID)) {
-    return true; // По умолчанию считаем, что есть медиа
-  }
-  
-  return roomUserHasMedia.get(roomID)!.get(socketId) ?? true;
-}
-
-/**
- * Получение всех участников комнаты (включая без медиа)
+ * Получение всех участников комнаты
  */
 function getAllParticipants(roomID: string): string[] {
   return Array.from(roomParticipants.get(roomID) || []);
@@ -154,21 +129,13 @@ io.on('connection', (socket: Socket) => {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
 
-    // Инициализируем хранилища для комнаты, если их нет
+    // Добавляем участника в хранилище
     if (!roomParticipants.has(roomID)) {
       roomParticipants.set(roomID, new Set());
     }
-    if (!roomUserHasMedia.has(roomID)) {
-      roomUserHasMedia.set(roomID, new Map());
-    }
-
-    // Сохраняем участника
     roomParticipants.get(roomID)!.add(socket.id);
-    
-    // Сохраняем флаг наличия медиа
-    setUserHasMedia(roomID, socket.id, hasMedia);
 
-    const allParticipants = getAllParticipants(roomID);
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
     // Сохраняем имя пользователя
@@ -180,12 +147,14 @@ io.on('connection', (socket: Socket) => {
 
     const currentUserName = getUserName(roomID, socket.id);
 
-    // Отправляем всем участникам информацию о новом пользователе
+    // Получаем всех участников комнаты
+    const allParticipants = getAllParticipants(roomID);
+
+    // Отправляем всем существующим участникам информацию о новом пользователе
     allParticipants.forEach(participantID => {
       if (participantID !== socket.id) {
         const participantUserNumber = getUserNumber(roomID, participantID);
         const participantUserName = getUserName(roomID, participantID);
-        const participantHasMedia = getUserHasMedia(roomID, participantID);
         
         io.to(participantID).emit(ACTIONS.ADD_PEER, {
           peerID: socket.id,
@@ -201,7 +170,7 @@ io.on('connection', (socket: Socket) => {
           createOffer: true,
           userNumber: participantUserNumber,
           userName: participantUserName,
-          hasMedia: participantHasMedia
+          hasMedia: true // Для существующих участников считаем, что у них есть медиа
         });
       }
     });
@@ -231,26 +200,24 @@ io.on('connection', (socket: Socket) => {
     if (realRooms.length === 0) return;
 
     realRooms.forEach(roomID => {
-      const allParticipants = getAllParticipants(roomID);
-      
-      // Уведомляем всех участников о выходе
-      allParticipants.forEach(participantID => {
-        if (participantID !== socket.id) {
-          io.to(participantID).emit(ACTIONS.REMOVE_PEER, {
-            peerID: socket.id,
-          });
-        }
-      });
-
-      // Удаляем участника из хранилищ
+      // Удаляем из хранилища участников
       if (roomParticipants.has(roomID)) {
         roomParticipants.get(roomID)!.delete(socket.id);
       }
+
+      const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
+      clients.forEach(clientID => {
+        io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
+          peerID: socket.id,
+        });
+        socket.emit(ACTIONS.REMOVE_PEER, {
+          peerID: clientID,
+        });
+      });
+
+      // Удаляем имя пользователя при выходе
       if (roomUserNames.has(roomID)) {
         roomUserNames.get(roomID)!.delete(socket.id);
-      }
-      if (roomUserHasMedia.has(roomID)) {
-        roomUserHasMedia.get(roomID)!.delete(socket.id);
       }
 
       socket.leave(roomID);
@@ -274,12 +241,20 @@ io.on('connection', (socket: Socket) => {
     if (!validate(roomID)) return;
 
     const userNumber = getUserNumber(roomID, socket.id);
-    const currentUserName = getUserName(roomID, socket.id);
 
-    // Если передано новое имя, обновляем его
-    if (userName && userName !== currentUserName) {
+    // Если передано новое имя, обновляем его и рассылаем всем
+    if (userName) {
       setUserName(roomID, socket.id, userName);
+      const currentUserName = getUserName(roomID, socket.id);
+      
+      // Рассылаем обновление имени всем участникам комнаты
+      io.to(roomID).emit('user-name-updated', {
+        peerID: socket.id,
+        userName: currentUserName
+      });
     }
+
+    const currentUserName = getUserName(roomID, socket.id);
 
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
@@ -287,7 +262,7 @@ io.on('connection', (socket: Socket) => {
       message,
       timestamp: timestamp || new Date().toISOString(),
       userNumber: userNumber,
-      userName: getUserName(roomID, socket.id)
+      userName: currentUserName
     };
 
     if (!roomChats.has(roomID)) {
@@ -306,7 +281,7 @@ io.on('connection', (socket: Socket) => {
     io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, {
       ...chatMessage,
       userNumber: userNumber,
-      userName: getUserName(roomID, socket.id)
+      userName: currentUserName
     });
   });
 
@@ -319,6 +294,26 @@ io.on('connection', (socket: Socket) => {
     } else {
       socket.emit(ACTIONS.CHAT_HISTORY, []);
     }
+  });
+
+  /**
+   * Обработчик обновления имени пользователя
+   */
+  socket.on('update-user-name', (data: { roomID: string; userName: string }) => {
+    const { roomID, userName } = data;
+    
+    if (!validate(roomID)) return;
+    
+    setUserName(roomID, socket.id, userName);
+    const currentUserName = getUserName(roomID, socket.id);
+    
+    // Отправляем всем обновление имени
+    io.to(roomID).emit('user-name-updated', {
+      peerID: socket.id,
+      userName: currentUserName
+    });
+    
+    console.log(`User ${socket.id} updated name to ${currentUserName}`);
   });
 
   /**
