@@ -48,8 +48,7 @@ interface ServerToClientEvents {
     peerID: string, 
     createOffer: boolean, 
     userNumber?: number,
-    userName?: string,
-    hasMedia?: boolean
+    userName?: string 
   }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
@@ -64,7 +63,20 @@ interface ServerToClientEvents {
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
-  'user-name-updated': (params: { peerID: string; userName: string }) => void;
+  'user-joined': (params: { 
+    peerID: string; 
+    userName: string;
+    timestamp: string;
+  }) => void;
+  'user-left': (params: { 
+    peerID: string; 
+    userName: string;
+    timestamp: string;
+  }) => void;
+  'user-name-updated': (params: { 
+    peerID: string; 
+    userName: string;
+  }) => void;
 }
 
 /**
@@ -74,7 +86,6 @@ interface ClientToServerEvents {
   [ACTIONS.JOIN]: (params: { 
     room: string;
     userName?: string;
-    hasMedia?: boolean;
   }) => void;
   [ACTIONS.RELAY_ICE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.RELAY_SDP]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
@@ -93,7 +104,10 @@ interface ClientToServerEvents {
     timestamp?: string;
   }) => void;
   [ACTIONS.LEAVE]: () => void;
-  'update-user-name': (params: { roomID: string; userName: string }) => void;
+  'update-user-name': (params: { 
+    roomID: string; 
+    userName: string;
+  }) => void;
 }
 
 /**

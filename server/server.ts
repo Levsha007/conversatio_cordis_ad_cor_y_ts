@@ -131,28 +131,12 @@ io.on('connection', (socket: Socket) => {
 
     const currentUserName = getUserName(roomID, socket.id);
 
-    // Отправляем сообщение в чат о подключении нового участника
-    const joinMessage: ChatMessage = {
-      id: `system-join-${Date.now()}-${socket.id}`,
-      sender: 'system',
-      message: `${currentUserName} подключился к комнате`,
-      timestamp: new Date().toISOString(),
-      userNumber: 0,
-      userName: 'Система'
-    };
-
-    if (!roomChats.has(roomID)) {
-      roomChats.set(roomID, []);
-    }
-
-    const roomMessages = roomChats.get(roomID)!;
-    if (roomMessages.length >= 100) {
-      roomMessages.shift();
-    }
-    roomMessages.push(joinMessage);
-
-    // Рассылаем уведомление о подключении
-    io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, joinMessage);
+    // Отправляем уведомление о подключении (НЕ в чат)
+    io.to(roomID).emit('user-joined', {
+      peerID: socket.id,
+      userName: currentUserName,
+      timestamp: new Date().toISOString()
+    });
 
     // Отправляем всем участникам информацию о новом пользователе
     clients.forEach(clientID => {
@@ -179,6 +163,11 @@ io.on('connection', (socket: Socket) => {
     socket.join(roomID);
     console.log(`User ${socket.id} (${currentUserName}) joined room ${roomID} as Participant ${userNumber}`);
 
+    // Если история чата ещё не существует, создаем её
+    if (!roomChats.has(roomID)) {
+      roomChats.set(roomID, []);
+    }
+
     // Отправляем историю чата текущему пользователю
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
   });
@@ -195,27 +184,14 @@ io.on('connection', (socket: Socket) => {
     if (realRooms.length === 0) return;
 
     realRooms.forEach(roomID => {
-      // Отправляем сообщение в чат об отключении участника
       const userName = getUserName(roomID, socket.id);
-      const leaveMessage: ChatMessage = {
-        id: `system-leave-${Date.now()}-${socket.id}`,
-        sender: 'system',
-        message: `${userName} покинул комнату`,
-        timestamp: new Date().toISOString(),
-        userNumber: 0,
-        userName: 'Система'
-      };
-
-      if (roomChats.has(roomID)) {
-        const roomMessages = roomChats.get(roomID)!;
-        if (roomMessages.length >= 100) {
-          roomMessages.shift();
-        }
-        roomMessages.push(leaveMessage);
-        
-        // Рассылаем уведомление об отключении
-        io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, leaveMessage);
-      }
+      
+      // Отправляем уведомление об отключении (НЕ в чат)
+      io.to(roomID).emit('user-left', {
+        peerID: socket.id,
+        userName: userName,
+        timestamp: new Date().toISOString()
+      });
 
       const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
       clients.forEach(clientID => {
@@ -258,6 +234,12 @@ io.on('connection', (socket: Socket) => {
     // Если передано новое имя, обновляем его
     if (userName && userName !== currentUserName) {
       setUserName(roomID, socket.id, userName);
+      
+      // Отправляем всем обновление имени
+      io.to(roomID).emit('user-name-updated', {
+        peerID: socket.id,
+        userName: getUserName(roomID, socket.id)
+      });
     }
 
     const chatMessage: ChatMessage = {
@@ -287,6 +269,26 @@ io.on('connection', (socket: Socket) => {
       userNumber: userNumber,
       userName: getUserName(roomID, socket.id)
     });
+  });
+
+  /**
+   * Обработчик обновления имени пользователя
+   */
+  socket.on('update-user-name', (data: { roomID: string; userName: string }) => {
+    const { roomID, userName } = data;
+    
+    if (!validate(roomID)) return;
+    
+    setUserName(roomID, socket.id, userName);
+    const currentUserName = getUserName(roomID, socket.id);
+    
+    // Отправляем всем обновление имени
+    io.to(roomID).emit('user-name-updated', {
+      peerID: socket.id,
+      userName: currentUserName
+    });
+    
+    console.log(`User ${socket.id} updated name to ${currentUserName}`);
   });
 
   /**

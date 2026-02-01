@@ -35,16 +35,6 @@ interface DeviceSettings {
 }
 
 /**
- * Интерфейс для уведомлений
- */
-interface Notification {
-  id: string;
-  message: string;
-  type: 'join' | 'leave' | 'system';
-  timestamp: string;
-}
-
-/**
  * Кастомный хук для определения мобильного устройства
  */
 const useIsMobile = (): boolean => {
@@ -94,21 +84,23 @@ const useTabSync = (roomId: string) => {
 const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
-  const [settings, setSettings] = useState<DeviceSettings>({
+  const [name, setName] = useState('');
+  // Устройства всегда включены по умолчанию
+  const [initialSettings, setInitialSettings] = useState<DeviceSettings>({
     audio: true,
     video: true
   });
-  const [name, setName] = useState('');
-
-  const handleToggle = (device: keyof DeviceSettings) => {
-    setSettings(prev => ({
-      ...prev,
-      [device]: !prev[device]
-    }));
-  };
 
   const handleJoin = () => {
-    onJoin(settings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
+    // Всегда передаем true для устройств, но начальные настройки (включены/выключены)
+    onJoin(initialSettings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
+  };
+
+  const toggleSetting = (type: keyof DeviceSettings) => {
+    setInitialSettings(prev => ({
+      ...prev,
+      [type]: !prev[type]
+    }));
   };
 
   return (
@@ -132,49 +124,56 @@ const DeviceSelection: React.FC<{
           </div>
         </div>
 
-        <p>Выберите устройства для видеоконференции:</p>
+        <p>Настройте начальное состояние устройств:</p>
         
         <div className={styles.deviceOptions}>
-          <label className={styles.deviceOption}>
-            <input
-              type="checkbox"
-              checked={settings.audio}
-              onChange={() => handleToggle('audio')}
-            />
-            <span className={styles.checkbox}></span>
-            <span className={styles.deviceLabel}>
+          <div className={styles.deviceOptionRow}>
+            <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>🎤</span>
-              Микрофон
-            </span>
-          </label>
+              <span className={styles.deviceName}>Микрофон</span>
+              <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
+                {initialSettings.audio ? 'Вкл' : 'Выкл'}
+              </span>
+            </div>
+            <button
+              className={`${styles.toggleButton} ${initialSettings.audio ? styles.toggleOn : styles.toggleOff}`}
+              onClick={() => toggleSetting('audio')}
+              type="button"
+            >
+              <div className={styles.toggleSlider} />
+            </button>
+          </div>
 
-          <label className={styles.deviceOption}>
-            <input
-              type="checkbox"
-              checked={settings.video}
-              onChange={() => handleToggle('video')}
-            />
-            <span className={styles.checkbox}></span>
-            <span className={styles.deviceLabel}>
+          <div className={styles.deviceOptionRow}>
+            <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>📹</span>
-              Камера
-            </span>
-          </label>
+              <span className={styles.deviceName}>Камера</span>
+              <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
+                {initialSettings.video ? 'Вкл' : 'Выкл'}
+              </span>
+            </div>
+            <button
+              className={`${styles.toggleButton} ${initialSettings.video ? styles.toggleOn : styles.toggleOff}`}
+              onClick={() => toggleSetting('video')}
+              type="button"
+            >
+              <div className={styles.toggleSlider} />
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.deviceInfo}>
+          <p>💡 Устройства всегда доступны, вы можете включить/выключить их в любое время</p>
+          <p>💡 Для видеоконференции рекомендуется включить оба устройства</p>
         </div>
 
         <div className={styles.deviceSelectionButtons}>
           <button
             onClick={handleJoin}
             className={styles.joinButton}
-            disabled={!settings.audio && !settings.video}
           >
             Войти в комнату
           </button>
-        </div>
-
-        <div className={styles.deviceSelectionHint}>
-          <p>💡 Для видеоконференции необходимо включить хотя бы одно устройство</p>
-          <p>💡 Вы можете отключить устройства после входа</p>
         </div>
       </div>
     </div>
@@ -190,7 +189,6 @@ function calculateLayout(
   fullscreenParticipant: string | null = null
 ): LayoutItem[] {
   if (fullscreenParticipant) {
-    // Исправляем полноэкранный режим
     return Array(clientsCount).fill({
       width: '100%',
       height: '100%'
@@ -292,12 +290,40 @@ const Room: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userName, setUserName] = useState('');
   const [showNameInput, setShowNameInput] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    message: string;
+    type: 'join' | 'leave' | 'system';
+    timestamp: string;
+  }>>([]);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [participantsList, setParticipantsList] = useState<Array<{
+    id: string;
+    name: string;
+    isLocal: boolean;
+    hasMedia: boolean;
+  }>>([]);
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setMessageInput(e.target.value);
   }, []);
+
+  /**
+   * Получение отображаемого имени пользователя
+   */
+  const getUserDisplayName = useCallback((userId: string): string => {
+    if (userId === LOCAL_VIDEO) return userName || 'Вы';
+    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
+  }, [userName, userNumbers, userNames]);
+
+  /**
+   * Получение метки отправителя сообщения
+   */
+  const getSenderLabel = useCallback((senderId: string): string => {
+    if (senderId === socket.id) return userName || 'Вы';
+    return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
+  }, [userName, userNumbers, userNames]);
 
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
@@ -359,26 +385,32 @@ const Room: React.FC = () => {
   const toggleFullscreen = useCallback((clientID: string) => {
     if (fullscreenParticipant === clientID) {
       setFullscreenParticipant(null);
+      // Выход из полноэкранного режима
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
     } else {
       setFullscreenParticipant(clientID);
+      
+      // Вход в полноэкранный режим
+      const videoWrapper = document.querySelector(`[data-client-id="${clientID}"]`) as HTMLElement;
+      if (videoWrapper && videoWrapper.requestFullscreen) {
+        videoWrapper.requestFullscreen().catch(err => {
+          console.error('Ошибка при входе в полноэкранный режим:', err);
+        });
+      }
     }
   }, [fullscreenParticipant]);
 
   /**
-   * Получение отображаемого имени пользователя
+   * Обработчик выхода из полноэкранного режима
    */
-  const getUserDisplayName = useCallback((userId: string): string => {
-    if (userId === LOCAL_VIDEO) return userName || 'Вы';
-    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
-  }, [userName, userNumbers, userNames]);
-
-  /**
-   * Получение метки отправителя сообщения
-   */
-  const getSenderLabel = useCallback((senderId: string): string => {
-    if (senderId === socket.id) return userName || 'Вы';
-    return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
-  }, [userName, userNumbers, userNames]);
+  const handleExitFullscreen = useCallback(() => {
+    setFullscreenParticipant(null);
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  }, []);
 
   /**
    * Копирование ссылки на комнату в буфер обмена
@@ -475,6 +507,34 @@ const Room: React.FC = () => {
     }
   }, [roomID, addChatMessage, userName]);
 
+  /**
+   * Функция обновления имени
+   */
+  const handleSaveName = useCallback(() => {
+    if (userName.trim()) {
+      const newName = userName.trim();
+      setUserName(newName);
+      
+      // Отправляем обновление имени на сервер
+      socket.emit('update-user-name', {
+        roomID: roomID || '',
+        userName: newName
+      });
+      
+      // Обновляем локально
+      setUserNames(prev => ({ ...prev, [socket.id as string]: newName }));
+      setShowNameInput(false);
+      
+      // Показываем уведомление
+      setNotifications(prev => [...prev, {
+        id: `name-updated-${Date.now()}`,
+        message: `Имя изменено на "${newName}"`,
+        type: 'system',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    }
+  }, [userName, roomID]);
+
   // Автопрокрутка чата к последнему сообщению
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -482,57 +542,36 @@ const Room: React.FC = () => {
     }
   }, [messages]);
 
-  // Обработчик системных сообщений для уведомлений
+  // Обработчик события выхода из полноэкранного режима
   useEffect(() => {
-    const handleSystemMessage = (msg: {
-      id: string;
-      message: string;
-      sender: string;
-      timestamp: string;
-      userNumber?: number;
-      userName?: string;
-    }) => {
-      // Если это системное сообщение о подключении/отключении
-      if (msg.sender === 'system' && (msg.message.includes('подключился') || msg.message.includes('покинул'))) {
-        const notificationType = msg.message.includes('подключился') ? 'join' : 'leave';
-        
-        const notificationId = `notification-${Date.now()}`;
-        setNotifications(prev => [...prev, {
-          id: notificationId,
-          message: msg.message,
-          type: notificationType,
-          timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-        
-        // Автоматически удаляем уведомление через 5 секунд
-        setTimeout(() => {
-          setNotifications(prev => prev.filter(n => n.id !== notificationId));
-        }, 5000);
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFullscreenParticipant(null);
       }
     };
 
-    socket.on(ACTIONS.CHAT_MESSAGE, handleSystemMessage);
-
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
     return () => {
-      socket.off(ACTIONS.CHAT_MESSAGE, handleSystemMessage);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
 
   // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName }: { 
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName: peerUserName }: { 
       peerID: string; 
       createOffer: boolean;
       userNumber?: number;
       userName?: string;
     }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', userName);
+      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', peerUserName);
       
       if (userNumber) {
         setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
       }
-      if (userName) {
-        setUserNames(prev => ({ ...prev, [peerID]: userName }));
+      if (peerUserName) {
+        setUserNames(prev => ({ ...prev, [peerID]: peerUserName }));
       }
     };
 
@@ -682,6 +721,85 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
+  // Эффект для обновления имени у других участников
+  useEffect(() => {
+    const handleUserNameUpdated = ({ peerID, userName: updatedName }: { peerID: string; userName: string }) => {
+      console.log(`User ${peerID} updated name to ${updatedName}`);
+      
+      // Обновляем имя в состоянии
+      setUserNames(prev => ({ ...prev, [peerID]: updatedName }));
+      
+      // Показываем уведомление (только если это не текущий пользователь)
+      if (peerID !== socket.id) {
+        setNotifications(prev => [...prev, {
+          id: `name-update-${peerID}-${Date.now()}`,
+          message: `${updatedName} изменил(а) имя`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    };
+
+    socket.on('user-name-updated', handleUserNameUpdated);
+    
+    return () => {
+      socket.off('user-name-updated', handleUserNameUpdated);
+    };
+  }, []);
+
+  // Эффект для обновления списка участников
+  useEffect(() => {
+    const participants = clients.map(clientId => ({
+      id: clientId,
+      name: getUserDisplayName(clientId),
+      isLocal: clientId === LOCAL_VIDEO,
+      hasMedia: clientId === LOCAL_VIDEO ? 
+        (mediaState.audio || mediaState.video || mediaState.screen) : 
+        (peerMediaElements.current[clientId]?.srcObject as MediaStream)?.getTracks().length > 0
+    }));
+    
+    setParticipantsList(participants);
+  }, [clients, getUserDisplayName, mediaState, peerMediaElements]);
+
+  // Эффект для уведомлений о подключении/отключении
+  useEffect(() => {
+    const handleUserJoined = ({ peerID, userName: joinedUserName, timestamp }: { 
+      peerID: string; 
+      userName: string;
+      timestamp: string;
+    }) => {
+      if (peerID !== socket.id) {
+        setNotifications(prev => [...prev, {
+          id: `join-${peerID}-${Date.now()}`,
+          message: `${joinedUserName} подключился`,
+          type: 'join',
+          timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    };
+
+    const handleUserLeft = ({ peerID, userName: leftUserName, timestamp }: { 
+      peerID: string; 
+      userName: string;
+      timestamp: string;
+    }) => {
+      setNotifications(prev => [...prev, {
+        id: `leave-${peerID}-${Date.now()}`,
+        message: `${leftUserName} отключился`,
+        type: 'leave',
+        timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    };
+
+    socket.on('user-joined', handleUserJoined);
+    socket.on('user-left', handleUserLeft);
+    
+    return () => {
+      socket.off('user-joined', handleUserJoined);
+      socket.off('user-left', handleUserLeft);
+    };
+  }, []);
+
   // Рендер основного интерфейса
   return (
     <div className={styles.roomContainer}>
@@ -727,6 +845,7 @@ const Room: React.FC = () => {
       {clients.map((clientID, index) => (
         <div 
           key={clientID}
+          data-client-id={clientID}
           className={`${styles.videoWrapper} ${
             fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
           } ${
@@ -820,7 +939,7 @@ const Room: React.FC = () => {
       {fullscreenParticipant && (
         <button 
           className={styles.exitFullscreenButton}
-          onClick={() => setFullscreenParticipant(null)}
+          onClick={handleExitFullscreen}
           title="Выйти из полноэкранного режима"
         >
           ✕ Выйти из полноэкранного режима
@@ -874,6 +993,18 @@ const Room: React.FC = () => {
           </button>
         )}
 
+        {/* Кнопка списка участников */}
+        <button
+          onClick={() => setShowParticipants(!showParticipants)}
+          className={`${styles.controlButton} ${
+            showParticipants ? styles.controlButtonParticipantsActive : styles.controlButtonParticipants
+          }`}
+          title="Список участников"
+          aria-label="Список участников"
+        >
+          👥
+        </button>
+
         {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
@@ -919,6 +1050,49 @@ const Room: React.FC = () => {
           🚪
         </button>
       </div>
+
+      {/* Панель списка участников */}
+      {showParticipants && (
+        <div className={styles.participantsPanel}>
+          <div className={styles.participantsHeader}>
+            <h3>Участники ({participantsList.length})</h3>
+            <button
+              onClick={() => setShowParticipants(false)}
+              className={styles.closeParticipantsButton}
+              aria-label="Закрыть список участников"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className={styles.participantsList}>
+            {participantsList.length === 0 ? (
+              <div className={styles.noParticipants}>Нет участников</div>
+            ) : (
+              participantsList.map(participant => (
+                <div 
+                  key={participant.id} 
+                  className={`${styles.participantItem} ${participant.isLocal ? styles.local : ''}`}
+                >
+                  <div className={`${styles.participantAvatar} ${participant.isLocal ? styles.local : ''}`}>
+                    {participant.name.charAt(0)}
+                  </div>
+                  <div className={styles.participantInfo}>
+                    <div className={styles.participantName}>
+                      {participant.name}
+                      {participant.isLocal && ' (Вы)'}
+                    </div>
+                    <div className={styles.participantStatus}>
+                      <span className={`${styles.statusIndicator} ${participant.hasMedia ? '' : styles.offline}`} />
+                      {participant.hasMedia ? 'В сети' : 'Без медиа'}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Чат */}
       {showChat && (
@@ -1093,10 +1267,7 @@ const Room: React.FC = () => {
                 Отмена
               </button>
               <button
-                onClick={() => {
-                  setUserNames(prev => ({ ...prev, [socket.id as string]: userName }));
-                  setShowNameInput(false);
-                }}
+                onClick={handleSaveName}
                 className={styles.saveButton}
               >
                 Сохранить
@@ -1108,10 +1279,17 @@ const Room: React.FC = () => {
 
       {/* Контейнер для уведомлений */}
       <div className={styles.notificationsContainer}>
-        {notifications.map((notification) => (
+        {notifications.slice(-3).map((notification) => (
           <div 
             key={notification.id}
             className={`${styles.notification} ${styles[`notification${notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}`]}`}
+            onAnimationEnd={() => {
+              setTimeout(() => {
+                setNotifications(prev => 
+                  prev.filter(n => n.id !== notification.id)
+                );
+              }, 3000);
+            }}
           >
             <div className={styles.notificationIcon}>
               {notification.type === 'join' ? '➕' : 

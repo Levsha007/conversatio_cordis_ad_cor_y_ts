@@ -217,7 +217,7 @@
   opacity: 0.8;
 }
 
-/* Стили для формы выбора устройств в стиле главной страницы */
+/* Стили для формы выбора устройств */
 .deviceSelectionOverlay {
   position: fixed;
   top: 0;
@@ -238,19 +238,21 @@
 }
 
 .deviceSelectionModal {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
   padding: 40px;
   border-radius: 20px;
   max-width: 500px;
   width: 100%;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   text-align: center;
   max-height: 90vh;
   overflow-y: auto;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(30, 30, 30, 0.95);
-  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .deviceSelectionModal h2 {
@@ -260,11 +262,12 @@
   font-weight: 300;
   text-transform: uppercase;
   letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .deviceSelectionModal p {
   margin-bottom: 25px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
   line-height: 1.5;
   font-size: 1rem;
 }
@@ -286,11 +289,11 @@
 .nameInput {
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   font-size: 1rem;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(40, 40, 50, 0.9);
   color: #ffffff;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
@@ -299,8 +302,8 @@
 .nameInput:focus {
   outline: none;
   border-color: #b30000;
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 0 3px rgba(179, 0, 0, 0.1);
+  background: rgba(50, 50, 60, 0.95);
+  box-shadow: 0 0 0 3px rgba(179, 0, 0, 0.15);
 }
 
 .nameInput::placeholder {
@@ -313,71 +316,113 @@
   margin-top: 5px;
 }
 
+/* Стили для выбора устройств */
 .deviceOptions {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
   margin-bottom: 30px;
 }
 
-.deviceOption {
+.deviceOptionRow {
   display: flex;
   align-items: center;
-  padding: 15px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 15px;
-  cursor: pointer;
+  justify-content: space-between;
+  padding: 16px;
+  background: rgba(40, 40, 50, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.05);
 }
 
-.deviceOption:hover {
-  border-color: #b30000;
-  background: rgba(179, 0, 0, 0.1);
+.deviceOptionRow:hover {
+  background: rgba(50, 50, 60, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.deviceOption input {
-  display: none;
-}
-
-.checkbox {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  margin-right: 15px;
-  position: relative;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-}
-
-.deviceOption input:checked + .checkbox {
-  background: #b30000;
-  border-color: #b30000;
-}
-
-.deviceOption input:checked + .checkbox::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.deviceLabel {
+.deviceStatus {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 16px;
-  font-weight: 500;
-  color: #ffffff;
 }
 
 .deviceIcon {
   font-size: 20px;
+}
+
+.deviceName {
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.deviceState {
+  font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.deviceOn {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+}
+
+.deviceOff {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+/* Toggle button */
+.toggleButton {
+  width: 52px;
+  height: 28px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toggleOn {
+  background: #4CAF50;
+}
+
+.toggleOff {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.toggleSlider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggleOn .toggleSlider {
+  transform: translateX(24px);
+}
+
+/* Информация об устройствах */
+.deviceInfo {
+  background: rgba(40, 40, 50, 0.6);
+  padding: 16px;
+  border-radius: 12px;
+  margin: 20px 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.deviceInfo p {
+  margin: 8px 0;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .deviceSelectionButtons {
@@ -404,7 +449,7 @@
   box-shadow: 0 8px 25px rgba(179, 0, 0, 0.3);
 }
 
-.deviceSelectionModal .joinButton:hover:not(:disabled) {
+.deviceSelectionModal .joinButton:hover {
   background: linear-gradient(135deg, #cc0000 0%, #990000 100%);
   transform: translateY(-2px);
   box-shadow: 0 12px 35px rgba(179, 0, 0, 0.4);
@@ -416,20 +461,6 @@
   opacity: 0.7;
   transform: none !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-}
-
-.deviceSelectionHint {
-  background: rgba(179, 0, 0, 0.1);
-  padding: 15px;
-  border-radius: 12px;
-  border-left: 4px solid #b30000;
-}
-
-.deviceSelectionHint p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 /* Панель управления (кнопки внизу экрана) */
@@ -533,7 +564,7 @@
   background: rgba(244, 67, 54, 1);
 }
 
-/* Стили для кнопки чата (неактивное состояние) */
+/* Стили для кнопки чата */
 .controlButtonChat {
   background: rgba(85, 85, 85, 0.8);
 }
@@ -542,7 +573,7 @@
   background: rgba(85, 85, 85, 1);
 }
 
-/* Стили для кнопки чата (активное состояние) */
+/* Стили для активной кнопки чата */
 .controlButtonChatActive {
   background: rgba(33, 150, 243, 0.8);
 }
@@ -551,7 +582,7 @@
   background: rgba(33, 150, 243, 1);
 }
 
-/* Стили для кнопки настроек (неактивное состояние) */
+/* Стили для кнопки настроек */
 .controlButtonSettings {
   background: rgba(85, 85, 85, 0.8);
 }
@@ -560,13 +591,27 @@
   background: rgba(85, 85, 85, 1);
 }
 
-/* Стили для кнопки настроек (активное состояние) */
+/* Стили для активной кнопки настроек */
 .controlButtonSettingsActive {
   background: rgba(255, 152, 0, 0.8);
 }
 
 .controlButtonSettingsActive:hover {
   background: rgba(255, 152, 0, 1);
+}
+
+/* Стили для кнопки списка участников */
+.controlButtonParticipants {
+  background: rgba(156, 39, 176, 0.8) !important;
+}
+
+.controlButtonParticipants:hover {
+  background: rgba(156, 39, 176, 1) !important;
+}
+
+.controlButtonParticipantsActive {
+  background: rgba(156, 39, 176, 1) !important;
+  box-shadow: 0 0 15px rgba(156, 39, 176, 0.4) !important;
 }
 
 /* Стили для кнопки выхода из комнаты */
@@ -610,26 +655,29 @@
   bottom: 80px;
   width: 350px;
   height: 450px;
-  background-color: rgba(255, 255, 255, 0.15);
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
   border-radius: 20px;
   display: flex;
   flex-direction: column;
   z-index: 100;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   transition: transform 0.3s ease, opacity 0.3s ease;
+  color: #ffffff;
 }
 
 /* Шапка чата */
 .chatHeader {
   padding: 15px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   font-weight: bold;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: transparent;
   color: white;
   font-size: 1.1rem;
 }
@@ -694,21 +742,22 @@
   border-radius: 20px;
   max-width: 80%;
   word-break: break-word;
-  background-color: rgba(255, 255, 255, 0.9);
+  background: rgba(40, 40, 50, 0.9);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 /* Пузырь локального сообщения */
 .messageBubbleLocal {
-  background: rgba(220, 248, 198, 0.9);
+  background: rgba(30, 60, 30, 0.9);
   border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
 /* Пузырь удалённого сообщения */
 .messageBubbleRemote {
-  background: rgba(236, 236, 236, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(40, 40, 50, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Время сообщения */
@@ -741,7 +790,7 @@
 /* Контейнер ввода сообщения */
 .chatInputContainer {
   padding: 15px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   display: flex;
   gap: 10px;
   align-items: center;
@@ -775,10 +824,11 @@
   flex: 1;
   padding: 12px 16px;
   border-radius: 25px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   outline: none;
   font-size: 0.95rem;
-  background-color: rgba(255, 255, 255, 0.9);
+  background: rgba(40, 40, 50, 0.9);
+  color: #ffffff;
   height: 40px;
   box-sizing: border-box;
   min-width: 0;
@@ -788,7 +838,7 @@
 .chatInput:focus {
   border-color: #2196F3;
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
-  background-color: white;
+  background: rgba(50, 50, 60, 0.95);
 }
 
 /* Кнопка отправки сообщения */
@@ -835,18 +885,22 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  background-color: rgba(255, 255, 255, 0.15);
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
   border-radius: 20px;
   padding: 20px;
   z-index: 100;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   min-width: 280px;
   transform: translateY(0);
   transition: transform 0.3s ease, opacity 0.3s ease;
   max-width: calc(100vw - 40px);
   box-sizing: border-box;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 /* Шапка панели настроек */
@@ -905,23 +959,24 @@
   width: 100%;
   padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   transition: border-color 0.3s ease;
   box-sizing: border-box;
   font-size: 0.95rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(40, 40, 50, 0.9);
+  color: #ffffff;
   backdrop-filter: blur(10px);
 }
 
 .settingsSelect:focus {
   border-color: #2196F3;
   outline: none;
-  background: white;
+  background: rgba(50, 50, 60, 0.95);
 }
 
 /* Стили для настроек имени */
 .nameSettings {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(40, 40, 50, 0.6);
   padding: 15px;
   border-radius: 12px;
   margin-bottom: 20px;
@@ -970,14 +1025,19 @@
 }
 
 .nameInputModal {
-  background: rgba(30, 30, 30, 0.95);
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
   padding: 30px;
   border-radius: 16px;
   max-width: 400px;
   width: 100%;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #ffffff;
 }
 
 .nameInputModal h3 {
@@ -989,11 +1049,11 @@
 .nameInputField {
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   font-size: 1rem;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(40, 40, 50, 0.9);
   color: #ffffff;
   margin-bottom: 20px;
 }
@@ -1001,7 +1061,7 @@
 .nameInputField:focus {
   outline: none;
   border-color: #b30000;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(50, 50, 60, 0.95);
 }
 
 .nameInputButtons {
@@ -1105,13 +1165,13 @@
   width: 100vw !important;
   height: 100vh !important;
   z-index: 1000;
-  background: #000 !important;
+  background: #000;
   border: none !important;
   margin: 0 !important;
 }
 
 .videoWrapperFullscreen .video {
-  object-fit: contain !important;
+  object-fit: contain;
   width: 100% !important;
   height: 100% !important;
 }
@@ -1126,7 +1186,7 @@
   top: 20px;
   right: 20px;
   z-index: 1001;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.9);
   color: white;
   border: none;
   border-radius: 25px;
@@ -1136,10 +1196,13 @@
   transition: all 0.2s ease;
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .exitFullscreenButton:hover {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 1);
   transform: scale(1.05);
 }
 
@@ -1163,6 +1226,145 @@
   }
 }
 
+/* Панель списка участников */
+.participantsPanel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 20px;
+  z-index: 100;
+  width: 280px;
+  max-width: calc(100vw - 40px);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.participantsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.participantsHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.closeParticipantsButton {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 24px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.closeParticipantsButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.participantsList {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.participantItem {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: rgba(40, 40, 50, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.participantItem:hover {
+  background: rgba(50, 50, 60, 0.8);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.participantItem.local {
+  background: rgba(30, 60, 30, 0.6);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.participantAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.participantAvatar.local {
+  background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+}
+
+.participantInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.participantName {
+  font-weight: 500;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participantStatus {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusIndicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4CAF50;
+}
+
+.statusIndicator.offline {
+  background: #f44336;
+}
+
+.noParticipants {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+}
+
 /* Контейнер для уведомлений */
 .notificationsContainer {
   position: fixed;
@@ -1179,15 +1381,17 @@
 
 /* Общие стили уведомлений */
 .notification {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(25, 25, 35, 0.98);
+  backdrop-filter: blur(30px) saturate(180%);
   color: white;
   padding: 12px;
   border-radius: 12px;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   animation: slideInRight 0.3s ease-out;
   pointer-events: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   max-width: 300px;
   word-break: break-word;
   display: flex;
@@ -1201,33 +1405,6 @@
   opacity: 0;
 }
 
-/* Иконка уведомления */
-.notificationIcon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-/* Контент уведомления */
-.notificationContent {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Текст уведомления */
-.notificationMessage {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  line-height: 1.3;
-}
-
-/* Время уведомления */
-.notificationTime {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-/* Типы уведомлений */
 .notificationJoin {
   border-left: 4px solid #4CAF50;
 }
@@ -1240,7 +1417,28 @@
   border-left: 4px solid #2196F3;
 }
 
-/* Анимации для уведомлений */
+.notificationIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.notificationContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.notificationMessage {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.notificationTime {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 @keyframes slideInRight {
   from {
     transform: translateX(100%);
@@ -1359,11 +1557,11 @@
     gap: 10px;
   }
 
-  .deviceOption {
+  .deviceOptionRow {
     padding: 12px;
   }
 
-  .deviceLabel {
+  .deviceName {
     font-size: 14px;
   }
 
@@ -1446,27 +1644,7 @@
     padding: 10px 14px;
   }
 
-  /* Контейнер для уведомлений на мобильных */
-  .notificationsContainer {
-    top: 10px;
-    right: 10px;
-    max-width: 250px;
-  }
-  
-  .notification {
-    padding: 10px;
-    max-width: 250px;
-  }
-  
-  .notificationMessage {
-    font-size: 13px;
-  }
-  
-  .notificationIcon {
-    font-size: 18px;
-  }
-
-  /* Исправление полноэкранного режима на мобильных устройствах */
+  /* Исправление полноэкранного режима для мобильных */
   .videoWrapperFullscreen {
     position: fixed !important;
     top: 0 !important;
@@ -1477,43 +1655,72 @@
     background: #000 !important;
     border: none !important;
     margin: 0 !important;
+    padding: 0 !important;
   }
-
+  
   .videoWrapperFullscreen .video {
-    object-fit: contain !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 100% !important;
     height: 100% !important;
+    object-fit: contain !important;
   }
-
+  
   .videoWrapperFullscreen .userLabel {
-    padding: 12px 16px;
-    font-size: 14px;
-    bottom: env(safe-area-inset-bottom, 10px);
+    position: absolute !important;
+    bottom: env(safe-area-inset-bottom, 20px) !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 1001 !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
   }
   
   .videoWrapperFullscreen .videoTopControls {
-    top: env(safe-area-inset-top, 10px);
-    left: 10px;
-    right: 10px;
+    position: absolute !important;
+    top: env(safe-area-inset-top, 10px) !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 1001 !important;
   }
   
   .exitFullscreenButton {
-    position: fixed;
-    top: env(safe-area-inset-top, 10px);
-    right: 10px;
-    z-index: 1001;
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
-    border: none;
-    border-radius: 20px;
-    padding: 12px 16px;
-    cursor: pointer;
-    font-size: 14px;
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    position: fixed !important;
+    top: env(safe-area-inset-top, 10px) !important;
+    right: 10px !important;
+    z-index: 1001 !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    backdrop-filter: blur(20px) !important;
+    padding: 12px 16px !important;
+    border-radius: 20px !important;
+    font-size: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .participantsPanel {
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: 80vh !important;
+  }
+  
+  .notificationsContainer {
+    top: 10px !important;
+    right: 10px !important;
+    left: 10px !important;
+    max-width: none !important;
+  }
+  
+  .notification {
+    max-width: none !important;
   }
 
   /* Улучшения для очень маленьких экранов */
@@ -1535,20 +1742,6 @@
     .videoWrapper {
       height: 22vh !important;
       min-height: 180px;
-    }
-    
-    .videoWrapperFullscreen .userLabel {
-      font-size: 12px;
-      padding: 8px 12px;
-    }
-    
-    .exitFullscreenButton {
-      font-size: 12px;
-      padding: 10px 14px;
-    }
-    
-    .notificationsContainer {
-      max-width: 220px;
     }
   }
 }
@@ -1578,18 +1771,6 @@
   .controls {
     bottom: 8px;
   }
-  
-  .videoWrapperFullscreen {
-    height: 100vh !important;
-  }
-  
-  .videoWrapperFullscreen .video {
-    object-fit: contain !important;
-  }
-  
-  .videoWrapperFullscreen .userLabel {
-    bottom: env(safe-area-inset-bottom, 10px);
-  }
 }
 
 /* Улучшения для планшетов */
@@ -1609,14 +1790,88 @@
   }
 }
 
-/* Анимация для перехода в полноэкранный режим */
+/* Исправления для полноэкранного режима на мобильных устройствах */
+.videoWrapperFullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1000;
+  background: #000;
+}
+
+.videoWrapperFullscreen .video {
+  object-fit: contain;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Для мобильных устройств с вертикальной ориентацией */
+@media (max-width: 767px) and (orientation: portrait) {
+  .videoWrapperFullscreen {
+    height: 100vh !important;
+  }
+  
+  .videoWrapperFullscreen .video {
+    object-fit: contain;
+  }
+}
+
+/* Для мобильных устройств с горизонтальной ориентацией */
+@media (max-width: 767px) and (orientation: landscape) {
+  .videoWrapperFullscreen {
+    height: 100vh !important;
+  }
+  
+  .videoWrapperFullscreen .video {
+    object-fit: contain;
+  }
+}
+
+/* Улучшения для очень маленьких экранов */
+@media (max-width: 360px) {
+  .videoWrapperFullscreen .userLabel {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  
+  .videoWrapperFullscreen .videoTopControls {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+  }
+}
+
+/* Дополнительные стили для улучшения отображения на мобильных */
+.videoWrapper {
+  transition: all 0.3s ease;
+}
+
+.videoWrapperFullscreen {
+  animation: expandToFullscreen 0.3s ease-out;
+}
+
 @keyframes expandToFullscreen {
   from {
     transform: scale(0.9);
-    opacity: 0.7;
+    opacity: 0.8;
   }
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* Улучшение кнопки выхода из полноэкранного режима для мобильных */
+@media (max-width: 767px) {
+  .exitFullscreenButton {
+    top: 10px;
+    right: 10px;
+    padding: 10px 15px;
+    font-size: 12px;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 }
