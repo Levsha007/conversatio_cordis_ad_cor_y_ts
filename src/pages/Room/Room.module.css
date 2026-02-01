@@ -1875,3 +1875,115 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
   }
 }
+
+/* Добавляем в конец файла следующие стилы */
+
+/* Стили для режима демонстрации экрана */
+.screenShareWrapper {
+  border: 2px solid #4CAF50 !important;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3) !important;
+  position: relative;
+  z-index: 5;
+}
+
+.screenShareBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(76, 175, 80, 0.9);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.screenShareIcon {
+  font-size: 14px;
+}
+
+.screenShareText {
+  white-space: nowrap;
+}
+
+/* Стили для участников без медиа в списке */
+.noMediaWrapper .participantPlaceholder {
+  background: linear-gradient(135deg, #555, #333);
+}
+
+.noMediaWrapper .participantStatus {
+  color: #ff9800;
+}
+
+/* Стили для участников в списке */
+.participantItem.screenSharing {
+  border-left: 4px solid #4CAF50;
+  background: rgba(76, 175, 80, 0.1) !important;
+}
+
+.screenSharingIndicator {
+  color: #4CAF50;
+  font-size: 14px;
+  margin-left: 8px;
+  animation: pulse 2s infinite;
+}
+
+.statusIndicator.online {
+  background: #4CAF50;
+}
+
+.statusIndicator.audioOnly {
+  background: #ff9800;
+}
+
+.statusIndicator.offline {
+  background: #f44336;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Адаптивные стили для режима демонстрации */
+@media (max-width: 767px) {
+  .videoWrapper:nth-child(1):not(.screenShareWrapper) {
+      order: 2;
+  }
+  
+  .screenShareWrapper {
+      order: 1;
+  }
+  
+  .screenShareBadge {
+      top: 5px;
+      left: 5px;
+      right: 5px;
+      justify-content: center;
+      padding: 6px 10px;
+      font-size: 11px;
+  }
+  
+  .screenShareWrapper {
+      border-width: 3px !important;
+  }
+}
+
+/* Для десктопа */
+@media (min-width: 768px) {
+  .screenShareWrapper {
+      order: 1;
+  }
+  
+  .videoWrapper:not(.screenShareWrapper) {
+      order: 2;
+  }
+}

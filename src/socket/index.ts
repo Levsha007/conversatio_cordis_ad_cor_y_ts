@@ -41,6 +41,15 @@ const options: CustomSocketOptions = {
 };
 
 /**
+ * Интерфейс для информации об участнике
+ */
+interface ParticipantInfo {
+  id: string;          // ID участника
+  name: string;        // Имя участника
+  isOnline: boolean;   // Онлайн статус
+}
+
+/**
  * Типы событий, которые может получать клиент от сервера
  */
 interface ServerToClientEvents {
@@ -63,20 +72,25 @@ interface ServerToClientEvents {
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  
+  // Новые события для уведомлений и списка участников
   'user-joined': (params: { 
     peerID: string; 
     userName: string;
     timestamp: string;
+    participants?: ParticipantInfo[];
   }) => void;
   'user-left': (params: { 
     peerID: string; 
     userName: string;
     timestamp: string;
+    participants?: ParticipantInfo[];
   }) => void;
   'user-name-updated': (params: { 
     peerID: string; 
     userName: string;
   }) => void;
+  'participants-list': (participants: ParticipantInfo[]) => void;
 }
 
 /**
@@ -104,10 +118,13 @@ interface ClientToServerEvents {
     timestamp?: string;
   }) => void;
   [ACTIONS.LEAVE]: () => void;
+  
+  // Новые события для обновления имени и получения списка участников
   'update-user-name': (params: { 
     roomID: string; 
     userName: string;
   }) => void;
+  'get-participants': (params: { roomID: string }) => void;
 }
 
 /**
