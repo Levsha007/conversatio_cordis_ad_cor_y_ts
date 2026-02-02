@@ -134,7 +134,7 @@ io.on('connection', (socket: Socket) => {
       return console.warn(`Invalid room ID: ${roomID}`);
     }
 
-    // Добавляем участника в общий список
+    // Всегда добавляем участника в общий список
     if (!allParticipants.has(roomID)) {
       allParticipants.set(roomID, new Set());
     }
@@ -155,7 +155,7 @@ io.on('connection', (socket: Socket) => {
     // Получаем список всех участников
     const participantsList = getAllParticipants(roomID);
 
-    // Отправляем уведомление о подключении (НЕ в чат)
+    // Отправляем уведомление о подключении (всегда, независимо от медиа)
     io.to(roomID).emit('user-joined', {
       peerID: socket.id,
       userName: currentUserName,
@@ -164,6 +164,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     // Отправляем всем участникам информацию о новом пользователе
+    // Убираем проверку hasMedia из событий ADD_PEER
     clients.forEach(clientID => {
       const clientUserNumber = getUserNumber(roomID, clientID);
       const clientUserName = getUserName(roomID, clientID);

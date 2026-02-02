@@ -1939,10 +1939,6 @@
   background: #4CAF50;
 }
 
-.statusIndicator.audioOnly {
-  background: #ff9800;
-}
-
 .statusIndicator.offline {
   background: #f44336;
 }

@@ -173,8 +173,7 @@ const DeviceSelection: React.FC<{
         </div>
 
         <div className={styles.deviceInfo}>
-          <p>💡 Устройства всегда доступны, вы можете включить/выключить их в любое время</p>
-          <p>💡 Для видеоконференции рекомендуется включить оба устройства</p>
+          <p>💡 Для изменения настроек перезагрузите страницу</p>
         </div>
 
         <div className={styles.deviceSelectionButtons}>
@@ -356,6 +355,7 @@ const Room: React.FC = () => {
     startScreenShare,
     stopScreenShare,
     initializeMedia,
+    refreshDevices,
     participantSettings,
     toggleParticipantVideo,
     toggleParticipantAudio
@@ -426,21 +426,16 @@ const Room: React.FC = () => {
   // Обновляем список участников с учетом всех данных
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => {
-      const hasMedia = participant.id === LOCAL_VIDEO ? 
-        (mediaState.audio || mediaState.video || mediaState.screen) :
-        (peerMediaElements.current[participant.id]?.srcObject as MediaStream)?.getTracks().length > 0 ||
-        clients.includes(participant.id);
-      
+      // Упрощаем логику: не показываем информацию о медиа
       const isScreenSharing = participant.id === screenShareParticipant;
       
       return {
         ...participant,
         isLocal: participant.id === socket.id,
-        hasMedia,
         isScreenSharing
       };
     });
-  }, [allParticipants, mediaState, peerMediaElements, clients, screenShareParticipant]);
+  }, [allParticipants, screenShareParticipant]);
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -933,12 +928,19 @@ const Room: React.FC = () => {
     };
   }, []);
 
-  // Запрашиваем список участников при загрузке
+  // Запрашиваем список участников при загрузке и обновляем устройства
   useEffect(() => {
     if (roomID && devicesInitialized) {
       socket.emit('get-participants', { roomID });
+      
+      // Принудительно обновляем список устройств при входе
+      setTimeout(() => {
+        if (refreshDevices) {
+          refreshDevices();
+        }
+      }, 1000);
     }
-  }, [roomID, devicesInitialized]);
+  }, [roomID, devicesInitialized, refreshDevices]);
 
   // Обработка и отображение ошибок WebRTC и медиаустройств
   useEffect(() => {
@@ -1267,13 +1269,9 @@ const Room: React.FC = () => {
                     </div>
                     <div className={styles.participantStatus}>
                       <span className={`${styles.statusIndicator} ${
-                        participant.isOnline ? 
-                          (participant.hasMedia ? styles.online : styles.audioOnly) : 
-                          styles.offline
+                        participant.isOnline ? styles.online : styles.offline
                       }`} />
-                      {participant.isOnline ? 
-                        (participant.hasMedia ? 'В сети с медиа' : 'Только аудио/чат') : 
-                        'Не в сети'}
+                      {participant.isOnline ? 'В сети' : 'Не в сети'}
                     </div>
                   </div>
                 </div>

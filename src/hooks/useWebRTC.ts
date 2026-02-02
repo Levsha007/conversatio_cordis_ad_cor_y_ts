@@ -54,6 +54,7 @@ type UseWebRTCReturn = {
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => void;
   initializeMedia: (constraints: { audio: boolean; video: boolean }, userName?: string) => Promise<void>;
+  refreshDevices: () => Promise<void>;
   participantSettings: Record<string, ParticipantSettings>;
   toggleParticipantVideo: (peerId: string) => void;
   toggleParticipantAudio: (peerId: string) => void;
@@ -171,6 +172,15 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [selectedAudioDevice, selectedVideoDevice]);
 
+  // Функция обновления списка устройств
+  const refreshDevices = useCallback(async (): Promise<void> => {
+    try {
+      await enumerateDevices();
+    } catch (err) {
+      console.error('Ошибка обновления устройств:', err);
+    }
+  }, [enumerateDevices]);
+
   // Инициализация медиапотока
   const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }, userName?: string): Promise<void> => {
     setMediaError(null);
@@ -188,29 +198,35 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
       let stream: MediaStream | null = null;
       
-      if (constraints.audio || constraints.video) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(constraints));
-          await enumerateDevices();
-        } catch (err) {
-          console.warn('Не удалось получить медиаустройства:', err);
-          // Создаем пустой поток для участников без устройств
-          stream = new MediaStream();
-        }
-      } else {
-        // Создаем пустой поток для участников без устройств
+      try {
+        // Всегда пытаемся получить доступ к устройствам
+        stream = await navigator.mediaDevices.getUserMedia(getMediaConstraints(constraints));
+        await enumerateDevices();
+      } catch (err) {
+        console.warn('Не удалось получить медиаустройства:', err);
+        // Всегда создаем поток, даже если устройства недоступны
         stream = new MediaStream();
       }
 
       setIsMediaReady(true);
       localMediaStream.current = stream;
 
-      // Обновляем состояние медиа
+      // Обновляем состояние медиа - ВСЕГДА устанавливаем true, если пользователь хочет использовать устройство
       setMediaState(prev => ({
         ...prev,
-        audio: constraints.audio && stream !== null,
-        video: constraints.video && stream !== null
+        audio: constraints.audio,
+        video: constraints.video
       }));
+
+      // Обновляем треки в потоке
+      if (stream) {
+        stream.getAudioTracks().forEach(track => {
+          track.enabled = constraints.audio;
+        });
+        stream.getVideoTracks().forEach(track => {
+          track.enabled = constraints.video;
+        });
+      }
 
       // Добавляем локальное видео
       addNewClient(LOCAL_VIDEO, () => {
@@ -458,11 +474,13 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     try {
       console.log(`Switching ${type} device to:`, deviceId);
 
-      // Сохраняем выбранное устройство
-      if (type === 'audio' && deviceId) {
-        setSelectedAudioDevice(deviceId);
-      } else if (type === 'video' && deviceId) {
-        setSelectedVideoDevice(deviceId);
+      // Если deviceId не указан, сбрасываем настройки к default
+      const actualDeviceId = deviceId || 'default';
+      
+      if (type === 'audio') {
+        setSelectedAudioDevice(actualDeviceId);
+      } else if (type === 'video') {
+        setSelectedVideoDevice(actualDeviceId);
       }
 
       // Если идет демонстрация экрана, обновляем только локальный поток
@@ -478,7 +496,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         });
 
         const constraints: MediaStreamConstraints = {
-          [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+          [type]: actualDeviceId ? { deviceId: { exact: actualDeviceId } } : true
         };
 
         let stream: MediaStream;
@@ -523,7 +541,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       });
 
       const constraints: MediaStreamConstraints = {
-        [type]: deviceId ? { deviceId: { exact: deviceId } } : true
+        [type]: actualDeviceId ? { deviceId: { exact: actualDeviceId } } : true
       };
 
       let stream: MediaStream;
@@ -577,6 +595,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       return true;
     } catch (err) {
       console.error(`Ошибка переключения устройства ${type}:`, err);
+      
+      // При ошибке все равно обновляем список устройств
+      await enumerateDevices();
+      
       return false;
     }
   }, [enumerateDevices, mediaState]);
@@ -625,9 +647,12 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           });
       }
 
+      // Обновляем список устройств
+      refreshDevices();
+      
       return newState;
     });
-  }, [mediaState.screen]);
+  }, [mediaState.screen, refreshDevices]);
 
   // Установка соединения с пиром - УЛУЧШЕННАЯ ВЕРСИЯ
   const setupPeerConnection = useCallback(async (
@@ -703,7 +728,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       console.log(`Connection state for ${peerID}:`, pc.connectionState);
     };
 
-    // Получение удаленного медиа потока
+    // Получение удаленного медиа поток
     pc.ontrack = ({ streams: [remoteStream] }) => {
       if (!remoteStream) {
         console.log('No remote stream received for peer:', peerID);
@@ -1011,6 +1036,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     startScreenShare,
     stopScreenShare,
     initializeMedia,
+    refreshDevices,
     participantSettings,
     toggleParticipantVideo,
     toggleParticipantAudio
