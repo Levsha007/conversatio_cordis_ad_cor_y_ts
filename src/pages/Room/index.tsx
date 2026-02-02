@@ -95,14 +95,12 @@ const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
   const [name, setName] = useState('');
-  // Устройства всегда включены по умолчанию
   const [initialSettings, setInitialSettings] = useState<DeviceSettings>({
     audio: true,
     video: true
   });
 
   const handleJoin = () => {
-    // Всегда передаем true для устройств, но начальные настройки (включены/выключены)
     onJoin(initialSettings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
   };
 
@@ -117,6 +115,13 @@ const DeviceSelection: React.FC<{
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка перед входом</h2>
+        
+        {/* Важное предупреждение */}
+        <div className={styles.deviceWarning}>
+          <p style={{ color: '#ff9800', fontWeight: 'bold', marginBottom: '20px' }}>
+            ⚠️ Внимание: выбранные устройства нельзя будет изменить без перезагрузки страницы!
+          </p>
+        </div>
         
         {/* Поле для ввода имени */}
         <div className={styles.nameInputSection}>
@@ -134,7 +139,7 @@ const DeviceSelection: React.FC<{
           </div>
         </div>
 
-        <p>Настройте начальное состояние устройств:</p>
+        <p>Выберите устройства для использования в конференции:</p>
         
         <div className={styles.deviceOptions}>
           <div className={styles.deviceOptionRow}>
@@ -142,7 +147,7 @@ const DeviceSelection: React.FC<{
               <span className={styles.deviceIcon}>🎤</span>
               <span className={styles.deviceName}>Микрофон</span>
               <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.audio ? 'Вкл' : 'Выкл'}
+                {initialSettings.audio ? 'Будет доступен' : 'Не будет доступен'}
               </span>
             </div>
             <button
@@ -159,7 +164,7 @@ const DeviceSelection: React.FC<{
               <span className={styles.deviceIcon}>📹</span>
               <span className={styles.deviceName}>Камера</span>
               <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.video ? 'Вкл' : 'Выкл'}
+                {initialSettings.video ? 'Будет доступна' : 'Не будет доступна'}
               </span>
             </div>
             <button
@@ -173,7 +178,9 @@ const DeviceSelection: React.FC<{
         </div>
 
         <div className={styles.deviceInfo}>
-          <p>💡 Для изменения настроек перезагрузите страницу</p>
+          <p>💡 <strong>Для изменения выбора устройств потребуется перезагрузка страницы</strong></p>
+          <p>💡 Демонстрация экрана будет работать независимо от выбранных устройств</p>
+          <p>💡 Микрофон и камера могут работать совместно с демонстрацией экрана</p>
         </div>
 
         <div className={styles.deviceSelectionButtons}>
@@ -356,6 +363,8 @@ const Room: React.FC = () => {
     stopScreenShare,
     initializeMedia,
     refreshDevices,
+    refreshPeerConnections,
+    isDeviceAvailable,
     participantSettings,
     toggleParticipantVideo,
     toggleParticipantAudio
@@ -387,6 +396,7 @@ const Room: React.FC = () => {
   }>>([]);
   const [showParticipants, setShowParticipants] = useState(false);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
+  const [initialMediaState, setInitialMediaState] = useState<DeviceSettings | null>(null);
 
   // Определяем, кто ведет демонстрацию экрана
   const screenShareParticipant = useMemo(() => {
@@ -426,7 +436,6 @@ const Room: React.FC = () => {
   // Обновляем список участников с учетом всех данных
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => {
-      // Упрощаем логику: не показываем информацию о медиа
       const isScreenSharing = participant.id === screenShareParticipant;
       
       return {
@@ -436,6 +445,12 @@ const Room: React.FC = () => {
       };
     });
   }, [allParticipants, screenShareParticipant]);
+
+  // Функция проверки доступности устройства
+  const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
+    if (!initialMediaState) return false; // Если еще не инициализировано, не доступно
+    return initialMediaState[type];
+  }, [initialMediaState]);
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -508,8 +523,17 @@ const Room: React.FC = () => {
     setShowDeviceSelection(false);
     setUserName(name);
     setUserNames(prev => ({ ...prev, [socket.id as string]: name }));
+    
+    // Сохраняем начальные настройки медиа
+    setInitialMediaState(settings);
+    
     await initializeMedia(settings, name);
     setDevicesInitialized(true);
+    
+    // Обновляем информацию об устройствах
+    if (refreshDevices) {
+      setTimeout(() => refreshDevices(), 500);
+    }
   };
 
   /**
@@ -603,6 +627,37 @@ const Room: React.FC = () => {
   const handleStopScreenShare = useCallback(() => {
     stopScreenShare();
   }, [stopScreenShare]);
+
+  /**
+   * Обработчик кнопки демонстрации экрана
+   */
+  const handleScreenShare = useCallback(async () => {
+    if (mediaState.screen) {
+      handleStopScreenShare();
+    } else {
+      try {
+        await handleStartScreenShare();
+      } catch (err) {
+        console.error('Ошибка демонстрации экрана:', err);
+        if (err instanceof Error && err.name === 'NotAllowedError') {
+          alert('Разрешение на демонстрацию экрана было отклонено');
+        }
+      }
+    }
+  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare]);
+
+  /**
+   * Переключение состояния медиа с проверкой доступности
+   */
+  const handleToggleMedia = useCallback((type: 'audio' | 'video') => {
+    // Проверяем, доступно ли устройство
+    if (!isDeviceEnabled(type)) {
+      alert(`Устройство "${type === 'audio' ? 'микрофон' : 'камера'}" не было выбрано при входе. Перезагрузите страницу для изменения настроек.`);
+      return;
+    }
+    
+    toggleMedia(type);
+  }, [isDeviceEnabled, toggleMedia]);
 
   /**
    * Обработчик выбора файла
@@ -928,11 +983,16 @@ const Room: React.FC = () => {
     };
   }, []);
 
-  // Запрашиваем список участников при загрузке и обновляем устройства
+  // Запрашиваем список участников при загрузке
   useEffect(() => {
     if (roomID && devicesInitialized) {
       socket.emit('get-participants', { roomID });
-      
+    }
+  }, [roomID, devicesInitialized]);
+
+  // Обновление устройств при инициализации
+  useEffect(() => {
+    if (devicesInitialized) {
       // Принудительно обновляем список устройств при входе
       setTimeout(() => {
         if (refreshDevices) {
@@ -940,7 +1000,7 @@ const Room: React.FC = () => {
         }
       }, 1000);
     }
-  }, [roomID, devicesInitialized, refreshDevices]);
+  }, [devicesInitialized, refreshDevices]);
 
   // Обработка и отображение ошибок WebRTC и медиаустройств
   useEffect(() => {
@@ -1130,24 +1190,26 @@ const Room: React.FC = () => {
       <div className={styles.controls}>
         {/* Кнопка микрофона */}
         <button
-          onClick={() => toggleMedia('audio')}
+          onClick={() => handleToggleMedia('audio')}
           className={`${styles.controlButton} ${
             mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
-          }`}
+          } ${!isDeviceEnabled('audio') ? styles.controlButtonDisabled : ''}`}
           title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
           aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
+          disabled={!isDeviceEnabled('audio')}
         >
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
 
         {/* Кнопка камеры */}
         <button
-          onClick={() => toggleMedia('video')}
+          onClick={() => handleToggleMedia('video')}
           className={`${styles.controlButton} ${
             mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
-          }`}
+          } ${!isDeviceEnabled('video') ? styles.controlButtonDisabled : ''}`}
           title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
           aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
+          disabled={!isDeviceEnabled('video')}
         >
           {mediaState.video ? '📹' : '📷'}
         </button>
@@ -1155,7 +1217,7 @@ const Room: React.FC = () => {
         {/* Кнопка демонстрации экрана */}
         {!mediaState.screen ? (
           <button
-            onClick={handleStartScreenShare}
+            onClick={handleScreenShare}
             className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
             title="Начать демонстрацию экрана"
             aria-label="Начать демонстрацию экрана"
@@ -1390,7 +1452,7 @@ const Room: React.FC = () => {
           </div>
 
           {/* Выбор микрофона */}
-          {availableDevices.audio.length > 0 && (
+          {availableDevices.audio.length > 0 && isDeviceEnabled('audio') && (
             <div className={styles.settingsSection}>
               <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
                 Микрофон:
@@ -1400,6 +1462,7 @@ const Room: React.FC = () => {
                 onChange={(e) => switchMediaDevice('audio', e.target.value)}
                 className={styles.settingsSelect}
                 aria-label="Выберите микрофон"
+                disabled={!isDeviceEnabled('audio')}
               >
                 {availableDevices.audio.map((device, index) => (
                   <option key={device.deviceId} value={device.deviceId}>
@@ -1411,7 +1474,7 @@ const Room: React.FC = () => {
           )}
 
           {/* Выбор камеры */}
-          {availableDevices.video.length > 0 && (
+          {availableDevices.video.length > 0 && isDeviceEnabled('video') && (
             <div className={styles.settingsSection}>
               <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
                 Камера:
@@ -1421,6 +1484,7 @@ const Room: React.FC = () => {
                 onChange={(e) => switchMediaDevice('video', e.target.value)}
                 className={styles.settingsSelect}
                 aria-label="Выберите камеру"
+                disabled={!isDeviceEnabled('video')}
               >
                 {availableDevices.video.map((device, index) => (
                   <option key={device.deviceId} value={device.deviceId}>
