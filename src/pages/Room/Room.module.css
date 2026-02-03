@@ -2063,3 +2063,71 @@
 .statusIndicator.offline {
   background: #f44336;
 }
+
+/* Стили для отключенных кнопок управления */
+.controlButton:disabled,
+.controlButtonDisabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  transform: none !important;
+  background: rgba(85, 85, 85, 0.5) !important;
+  box-shadow: none !important;
+}
+
+.controlButton:disabled:hover,
+.controlButtonDisabled:hover {
+  transform: none !important;
+  background: rgba(85, 85, 85, 0.5) !important;
+  box-shadow: none !important;
+}
+
+/* Стили для кнопки демонстрации экрана, когда она недоступна */
+.controlButtonScreenShare:disabled {
+  background: rgba(85, 85, 85, 0.5) !important;
+}
+
+/* Информационная подсказка для отключенных устройств */
+.deviceDisabledTooltip {
+  position: relative;
+}
+
+.deviceDisabledTooltip::after {
+  content: "Устройство не было выбрано при входе. Перезагрузите страницу для изменения настроек.";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 1000;
+}
+
+.deviceDisabledTooltip:hover::after {
+  opacity: 1;
+}
+
+/* Обновляем отображение статуса участников в списке */
+.participantStatus {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Убираем специфичные стили для статусов с медиа */
+.statusIndicator.online {
+  background: #4CAF50;
+}
+
+/* Убираем .statusIndicator.audioOnly если он есть */
+.statusIndicator.audioOnly {
+  background: #4CAF50; /* Делаем такой же как online */
+}
