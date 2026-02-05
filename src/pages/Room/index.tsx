@@ -45,7 +45,7 @@ interface Participant {
 }
 
 /**
- * Интерфейс для медиа состояния
+ * Интерфейс для состояния медиа (из useWebRTC)
  */
 interface MediaState {
   audio: boolean;
@@ -104,7 +104,6 @@ const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
   const [name, setName] = useState('');
-  // Устройства всегда включены по умолчанию
   const [initialSettings, setInitialSettings] = useState<DeviceSettings>({
     audio: true,
     video: true
@@ -127,9 +126,9 @@ const DeviceSelection: React.FC<{
         <h2>Настройка перед входом</h2>
         
         {/* Важное предупреждение */}
-        <div className={styles.deviceWarning}>
-          <p style={{ color: '#ff9800', fontWeight: 'bold', marginBottom: '20px' }}>
-            ⚠️ Внимание: выбранные устройства нельзя будет изменить без перезагрузки страницы!
+        <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(179, 0, 0, 0.1)', borderRadius: '8px' }}>
+          <p style={{ color: '#ffffff', fontWeight: 'bold' }}>
+            ⚠️ Для изменения выбора устройств потребуется перезагрузка страницы
           </p>
         </div>
         
@@ -149,7 +148,7 @@ const DeviceSelection: React.FC<{
           </div>
         </div>
 
-        <p>Выберите устройства для использования в конференции:</p>
+        <p>Выберите устройства для использования:</p>
         
         <div className={styles.deviceOptions}>
           <div className={styles.deviceOptionRow}>
@@ -157,7 +156,7 @@ const DeviceSelection: React.FC<{
               <span className={styles.deviceIcon}>🎤</span>
               <span className={styles.deviceName}>Микрофон</span>
               <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.audio ? 'Будет доступен' : 'Не будет доступен'}
+                {initialSettings.audio ? 'Будет использоваться' : 'Не будет использоваться'}
               </span>
             </div>
             <button
@@ -174,7 +173,7 @@ const DeviceSelection: React.FC<{
               <span className={styles.deviceIcon}>📹</span>
               <span className={styles.deviceName}>Камера</span>
               <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.video ? 'Будет доступна' : 'Не будет доступна'}
+                {initialSettings.video ? 'Будет использоваться' : 'Не будет использоваться'}
               </span>
             </div>
             <button
@@ -185,12 +184,6 @@ const DeviceSelection: React.FC<{
               <div className={styles.toggleSlider} />
             </button>
           </div>
-        </div>
-
-        <div className={styles.deviceInfo}>
-          <p>💡 <strong>Для изменения выбора устройств потребуется перезагрузка страницы</strong></p>
-          <p>💡 Демонстрация экрана будет работать независимо от выбранных устройств</p>
-          <p>💡 Микрофон и камера могут работать совместно с демонстрацией экрана</p>
         </div>
 
         <div className={styles.deviceSelectionButtons}>
@@ -406,7 +399,7 @@ const Room: React.FC = () => {
   }>>([]);
   const [showParticipants, setShowParticipants] = useState(false);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
-  const [initialMediaState, setInitialMediaState] = useState<MediaState | null>(null);
+  const [initialMediaState, setInitialMediaState] = useState<DeviceSettings | null>(null);
 
   // Определяем, кто ведет демонстрацию экрана
   const screenShareParticipant = useMemo(() => {
@@ -446,15 +439,21 @@ const Room: React.FC = () => {
   // Обновляем список участников с учетом всех данных
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => {
+      const hasMedia = participant.id === LOCAL_VIDEO ? 
+        (mediaState.audio || mediaState.video || mediaState.screen) :
+        (peerMediaElements.current[participant.id]?.srcObject as MediaStream)?.getTracks().length > 0 ||
+        clients.includes(participant.id);
+      
       const isScreenSharing = participant.id === screenShareParticipant;
       
       return {
         ...participant,
         isLocal: participant.id === socket.id,
+        hasMedia,
         isScreenSharing
       };
     });
-  }, [allParticipants, screenShareParticipant]);
+  }, [allParticipants, mediaState, peerMediaElements, clients, screenShareParticipant]);
 
   // Стабильные ссылки на обработчики
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -527,31 +526,10 @@ const Room: React.FC = () => {
     setShowDeviceSelection(false);
     setUserName(name);
     setUserNames(prev => ({ ...prev, [socket.id as string]: name }));
-    
-    // Сохраняем начальные настройки медиа
-    const initialMedia: MediaState = {
-      audio: settings.audio,
-      video: settings.video,
-      screen: false
-    };
-    setInitialMediaState(initialMedia);
-    
+    setInitialMediaState(settings);
     await initializeMedia(settings, name);
     setDevicesInitialized(true);
-    
-    // Обновляем информацию об устройствах
-    if (refreshDevices) {
-      setTimeout(() => refreshDevices(), 500);
-    }
   };
-
-  /**
-   * Функция проверки доступности устройства
-   */
-  const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
-    if (!initialMediaState) return true;
-    return initialMediaState[type];
-  }, [initialMediaState]);
 
   /**
    * Переключение полноэкранного режима для участника
@@ -644,24 +622,6 @@ const Room: React.FC = () => {
   const handleStopScreenShare = useCallback(() => {
     stopScreenShare();
   }, [stopScreenShare]);
-
-  /**
-   * Обработчик для кнопки демонстрации экрана
-   */
-  const handleScreenShare = useCallback(async () => {
-    if (mediaState.screen) {
-      handleStopScreenShare();
-    } else {
-      try {
-        await handleStartScreenShare();
-      } catch (err) {
-        console.error('Ошибка демонстрации экрана:', err);
-        if (err instanceof Error && err.name === 'NotAllowedError') {
-          alert('Разрешение на демонстрацию экрана было отклонено');
-        }
-      }
-    }
-  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare]);
 
   /**
    * Обработчик выбора файла
@@ -1013,10 +973,31 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
-  // Добавьте useEffect для принудительной синхронизации при изменениях:
+  // Функция проверки доступности устройства
+  const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
+    if (!initialMediaState) return true; // Если еще не инициализировано, разрешаем
+    return initialMediaState[type];
+  }, [initialMediaState]);
+
+  // Обработчик демонстрации экрана
+  const handleScreenShare = useCallback(async () => {
+    if (mediaState.screen) {
+      handleStopScreenShare();
+    } else {
+      try {
+        await handleStartScreenShare();
+      } catch (err) {
+        console.error('Ошибка демонстрации экрана:', err);
+        if (err instanceof Error && err.name === 'NotAllowedError') {
+          alert('Разрешение на демонстрацию экрана было отклонено');
+        }
+      }
+    }
+  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare]);
+
+  // Синхронизация треков после инициализации
   useEffect(() => {
     if (devicesInitialized && forceSyncTracks) {
-      // Синхронизируем треки после инициализации
       const timer = setTimeout(() => {
         forceSyncTracks();
       }, 2000);
@@ -1024,18 +1005,6 @@ const Room: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [devicesInitialized, forceSyncTracks]);
-
-  // Также синхронизируйте при изменении состояния медиа:
-  useEffect(() => {
-    if (devicesInitialized && forceSyncTracks) {
-      // Синхронизируем при изменении медиа-состояния
-      const timer = setTimeout(() => {
-        forceSyncTracks();
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [mediaState.audio, mediaState.video, mediaState.screen, devicesInitialized, forceSyncTracks]);
 
   // Рендер основного интерфейса
   return (
@@ -1230,26 +1199,27 @@ const Room: React.FC = () => {
           {mediaState.video ? '📹' : '📷'}
         </button>
 
-        {/* Кнопка демонстрации экрана */}
-        {!mediaState.screen ? (
-          <button
-            onClick={handleScreenShare}
-            className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
-            title="Начать демонстрацию экрана"
-            aria-label="Начать демонстрацию экрана"
-            disabled={!isDeviceEnabled('video') && !mediaState.video}
-          >
-            🖥️
-          </button>
-        ) : (
-          <button
-            onClick={handleScreenShare}
-            className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}
-            title="Остановить демонстрацию экрана"
-            aria-label="Остановить демонстрацию экрана"
-          >
-            ⏹️
-          </button>
+        {/* Кнопка демонстрации экрана (скрываем на мобильных) */}
+        {!isMobile && (
+          !mediaState.screen ? (
+            <button
+              onClick={handleScreenShare}
+              className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
+              title="Начать демонстрацию экрана"
+              aria-label="Начать демонстрацию экрана"
+            >
+              🖥️
+            </button>
+          ) : (
+            <button
+              onClick={handleScreenShare}
+              className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}
+              title="Остановить демонстрацию экрана"
+              aria-label="Остановить демонстрацию экрана"
+            >
+              ⏹️
+            </button>
+          )
         )}
 
         {/* Кнопка списка участников */}
@@ -1348,9 +1318,13 @@ const Room: React.FC = () => {
                     </div>
                     <div className={styles.participantStatus}>
                       <span className={`${styles.statusIndicator} ${
-                        participant.isOnline ? styles.online : styles.offline
+                        participant.isOnline ? 
+                          (participant.hasMedia ? styles.online : styles.audioOnly) : 
+                          styles.offline
                       }`} />
-                      {participant.isOnline ? 'В сети' : 'Не в сети'}
+                      {participant.isOnline ? 
+                        (participant.hasMedia ? 'В сети с медиа' : 'Только аудио/чат') : 
+                        'Не в сети'}
                     </div>
                   </div>
                 </div>

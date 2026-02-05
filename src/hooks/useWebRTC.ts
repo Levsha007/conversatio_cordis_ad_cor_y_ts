@@ -217,18 +217,18 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           constraints: constraints
         });
         
-        // Отключаем треки, если пользователь не хочет их использовать
-        if (!constraints.audio) {
+        // ВАЖНО: Всегда включаем треки если они получены и пользователь их выбрал
+        if (constraints.audio && stream.getAudioTracks().length > 0) {
           stream.getAudioTracks().forEach(track => {
-            track.enabled = false;
-            console.log('Audio track disabled on initialization');
+            track.enabled = true;
+            console.log('Audio track enabled on initialization');
           });
         }
         
-        if (!constraints.video) {
+        if (constraints.video && stream.getVideoTracks().length > 0) {
           stream.getVideoTracks().forEach(track => {
-            track.enabled = false;
-            console.log('Video track disabled on initialization');
+            track.enabled = true;
+            console.log('Video track enabled on initialization');
           });
         }
         
@@ -251,7 +251,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       setIsMediaReady(true);
       localMediaStream.current = stream;
 
-      // Обновляем состояние медиа на основе constraints
+      // ВАЖНО: Упрощаем логику - если устройство выбрано при входе, считаем что оно включено
       setMediaState(prev => ({
         ...prev,
         audio: constraints.audio,
@@ -286,7 +286,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       addNewClient(LOCAL_VIDEO);
       if (roomID) socket.emit(ACTIONS.JOIN, { room: roomID, userName: userName } as any);
     }
-  }, [getMediaConstraints, enumerateDevices, addNewClient, roomID, mediaState.screen]);
+  }, [getMediaConstraints, enumerateDevices, addNewClient, roomID]);
 
   // Остановка демонстрации экрана
   const stopScreenShare = useCallback((): void => {

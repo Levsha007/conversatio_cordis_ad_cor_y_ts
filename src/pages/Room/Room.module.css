@@ -409,22 +409,6 @@
   transform: translateX(24px);
 }
 
-/* Информация об устройствах */
-.deviceInfo {
-  background: rgba(40, 40, 50, 0.6);
-  padding: 16px;
-  border-radius: 12px;
-  margin: 20px 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.deviceInfo p {
-  margin: 8px 0;
-  color: rgba(255, 255, 255, 0.9);
-}
-
 .deviceSelectionButtons {
   display: flex;
   gap: 15px;
