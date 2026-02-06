@@ -32,9 +32,17 @@ const Main: React.FC = () => {
             return;
         }
 
-        // Проверяем валидность UUID
-        if (!validate(trimmedId)) {
-            setError('Неверный формат ID комнаты. ID должен быть в формате UUID');
+        // Дополнительная валидация UUID
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        
+        if (!uuidRegex.test(trimmedId)) {
+            setError('Неверный формат ID комнаты. ID должен быть в формате UUID (например: 550e8400-e29b-41d4-a716-446655440000)');
+            return;
+        }
+        
+        // Проверка на XSS в ID (хотя маловероятно)
+        if (/[<>"'`&]/.test(trimmedId)) {
+            setError('ID комнаты содержит недопустимые символы');
             return;
         }
 
@@ -44,7 +52,12 @@ const Main: React.FC = () => {
 
     // Обработчик изменения поля ввода
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setRoomIdInput(e.target.value);
+        const value = e.target.value;
+        // Фильтрация на лету
+        const filtered = value.replace(/[<>"'`&]/g, '');
+        if (filtered.length <= 36) { // UUID макс длина 36 символов
+            setRoomIdInput(filtered);
+        }
         // Сбрасываем ошибку при изменении текста
         if (error) setError('');
     };
@@ -73,8 +86,9 @@ const Main: React.FC = () => {
                             type="text"
                             value={roomIdInput}
                             onChange={handleInputChange}
-                            placeholder="Enter Room ID"
+                            placeholder="Enter Room ID (UUID format)"
                             className={styles.roomIdInput}
+                            maxLength={36}
                         />
                         {/* Кнопка входа в комнату (активна только при введенном ID) */}
                         <button
@@ -102,6 +116,7 @@ const Main: React.FC = () => {
                         <li>Share the room ID with participants</li>
                         <li>Join using the room ID you received</li>
                         <li>Room ID must be a valid UUID format</li>
+                        <li>Example UUID: 550e8400-e29b-41d4-a716-446655440000</li>
                     </ol>
                 </div>
             </div>

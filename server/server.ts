@@ -5,7 +5,7 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
 
 // Импорт констант действий из actions.ts
-import { ACTIONS } from './socket/actions';
+import { ACTIONS, sanitizeUserName, sanitizeMessage, hasXssPattern } from './socket/actions';
 
 /**
  * Интерфейс для сообщений чата
@@ -22,6 +22,36 @@ interface ChatMessage {
 // Создаем Express приложение и HTTP сервер
 const app = express();
 const server = createServer(app);
+
+// Добавляем security headers middleware
+app.use((req, res, next) => {
+  // Content Security Policy
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: blob:; " +
+    "media-src 'self' blob:; " +
+    "connect-src 'self' wss: ws:; " +
+    "font-src 'self'; " +
+    "frame-ancestors 'none';"
+  );
+  
+  // XSS Protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Запрет кэширования для API
+  if (req.path.includes('/socket.io/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  
+  next();
+});
 
 // Настраиваем Socket.IO сервер
 const io = new Server(server, {
@@ -178,10 +208,27 @@ io.on('connection', (socket: Socket) => {
    * Обработчик входа в комнату
    * @param config - параметры входа
    */
-  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string }) => {
-    const { room: roomID, userName } = config;
+  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string; hasMedia?: boolean }) => {
+    const { room: roomID, userName, hasMedia } = config;
+    
+    // Валидация roomID
     if (!validate(roomID)) {
-      return console.warn(`Invalid room ID: ${roomID}`);
+      console.warn(`Invalid room ID: ${roomID}`);
+      socket.emit('error', { message: 'Неверный формат комнаты' });
+      return;
+    }
+    
+    // Очистка имени пользователя
+    const cleanUserName = sanitizeUserName(userName || '');
+    
+    // Проверка на XSS паттерны
+    if (hasXssPattern(userName || '')) {
+      console.warn(`[SECURITY] Potential XSS attempt in username from ${socket.id}:`, {
+        username: userName,
+        room: roomID
+      });
+      socket.emit('error', { message: 'Имя содержит недопустимые символы' });
+      return;
     }
 
     // Добавляем участника в общий список
@@ -193,9 +240,9 @@ io.on('connection', (socket: Socket) => {
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
-    // Сохраняем имя пользователя
-    if (userName) {
-      setUserName(roomID, socket.id, userName);
+    // Сохраняем имя пользователя (очищенное)
+    if (cleanUserName) {
+      setUserName(roomID, socket.id, cleanUserName);
     } else {
       setUserName(roomID, socket.id, `Участник ${userNumber}`);
     }
@@ -222,7 +269,8 @@ io.on('connection', (socket: Socket) => {
         peerID: socket.id,
         createOffer: false,
         userNumber: userNumber,
-        userName: currentUserName
+        userName: currentUserName,
+        hasMedia: hasMedia
       });
       
       // Отправляем новому пользователю информацию о существующих участниках
@@ -230,7 +278,8 @@ io.on('connection', (socket: Socket) => {
         peerID: clientID,
         createOffer: true,
         userNumber: clientUserNumber,
-        userName: clientUserName
+        userName: clientUserName,
+        hasMedia: hasMedia
       });
     });
 
@@ -260,13 +309,35 @@ io.on('connection', (socket: Socket) => {
     const { roomID, message, id, timestamp, userName } = data;
 
     if (!validate(roomID)) return;
+    
+    // Детектирование потенциальных XSS атак
+    if (hasXssPattern(message) || hasXssPattern(userName || '')) {
+      console.warn(`[SECURITY] XSS attempt blocked from ${socket.id}:`, {
+        message: message.substring(0, 100),
+        userName: userName,
+        room: roomID,
+        timestamp: new Date().toISOString()
+      });
+      
+      socket.emit('error', { message: 'Сообщение содержит недопустимые символы' });
+      return;
+    }
+    
+    // Очистка данных
+    const cleanMessage = sanitizeMessage(message);
+    const cleanUserName = userName ? sanitizeUserName(userName) : undefined;
+    
+    if (cleanMessage.length === 0) {
+      socket.emit('error', { message: 'Сообщение не может быть пустым' });
+      return;
+    }
 
     const userNumber = getUserNumber(roomID, socket.id);
     const currentUserName = getUserName(roomID, socket.id);
 
-    // Если передано новое имя, обновляем его
-    if (userName && userName !== currentUserName) {
-      setUserName(roomID, socket.id, userName);
+    // Если передано новое имя, обновляем его (очищенное)
+    if (cleanUserName && cleanUserName !== currentUserName) {
+      setUserName(roomID, socket.id, cleanUserName);
       
       // Отправляем всем обновление имени
       io.to(roomID).emit('user-name-updated', {
@@ -278,7 +349,7 @@ io.on('connection', (socket: Socket) => {
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
       sender: socket.id,
-      message,
+      message: cleanMessage, // Используем очищенное сообщение
       timestamp: timestamp || new Date().toISOString(),
       userNumber: userNumber,
       userName: getUserName(roomID, socket.id)
@@ -312,7 +383,19 @@ io.on('connection', (socket: Socket) => {
     
     if (!validate(roomID)) return;
     
-    setUserName(roomID, socket.id, userName);
+    // Проверка на XSS
+    if (hasXssPattern(userName)) {
+      console.warn(`[SECURITY] XSS attempt in update-user-name from ${socket.id}:`, {
+        userName: userName,
+        room: roomID
+      });
+      socket.emit('error', { message: 'Имя содержит недопустимые символы' });
+      return;
+    }
+    
+    // Очистка имени пользователя
+    const cleanUserName = sanitizeUserName(userName);
+    setUserName(roomID, socket.id, cleanUserName);
     const currentUserName = getUserName(roomID, socket.id);
     
     // Отправляем всем обновление имени
@@ -328,6 +411,8 @@ io.on('connection', (socket: Socket) => {
    * Обработчик запроса истории чата
    */
   socket.on(ACTIONS.REQUEST_CHAT_HISTORY, ({ roomID }: { roomID: string }) => {
+    if (!validate(roomID)) return;
+    
     if (roomChats.has(roomID)) {
       socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
     } else {
@@ -369,6 +454,8 @@ io.on('connection', (socket: Socket) => {
     peerID: string;
     sessionDescription: RTCSessionDescriptionInit;
   }) => {
+    if (!peerID || !sessionDescription) return;
+    
     io.to(peerID).emit(ACTIONS.SESSION_DESCRIPTION, {
       peerID: socket.id,
       sessionDescription,
@@ -385,6 +472,8 @@ io.on('connection', (socket: Socket) => {
     peerID: string;
     iceCandidate: RTCIceCandidateInit;
   }) => {
+    if (!peerID || !iceCandidate) return;
+    
     io.to(peerID).emit(ACTIONS.ICE_CANDIDATE, {
       peerID: socket.id,
       iceCandidate,

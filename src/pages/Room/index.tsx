@@ -54,6 +54,64 @@ interface MediaState {
 }
 
 /**
+ * Функция для детектирования XSS паттернов
+ */
+const detectXssPattern = (input: string): boolean => {
+  if (!input || typeof input !== 'string') return false;
+  
+  const xssPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /onerror=/i,
+    /onload=/i,
+    /onclick=/i,
+    /eval\(/i,
+    /alert\(/i,
+    /document\./i,
+    /window\./i,
+    /\.src\s*=/i,
+    /iframe/i,
+    /img.*src/i
+  ];
+  
+  return xssPatterns.some(pattern => pattern.test(input));
+};
+
+/**
+ * Клиентские утилиты для очистки и валидации
+ */
+const clientSanitizeInput = (input: string): string => {
+  if (!input || typeof input !== 'string') return '';
+  
+  return input
+    .replace(/[<>"'`&]/g, '') // Удаляем опасные символы
+    .trim()
+    .substring(0, 500); // Ограничение на клиенте
+};
+
+const clientValidateInput = (input: string, type: 'name' | 'message'): boolean => {
+  if (!input || typeof input !== 'string') return false;
+  
+  // Проверка на пустые строки после очистки
+  if (input.trim().length === 0) return false;
+  
+  // Проверка на минимальную/максимальную длину
+  if (type === 'name' && input.length > 50) return false;
+  if (type === 'message' && input.length > 1000) return false;
+  
+  // Проверка на XSS паттерны
+  return !detectXssPattern(input);
+};
+
+const escapeHtml = (text: string): string => {
+  if (!text || typeof text !== 'string') return '';
+  
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+};
+
+/**
  * Кастомный хук для определения мобильного устройства
  */
 const useIsMobile = (): boolean => {
@@ -110,7 +168,11 @@ const DeviceSelection: React.FC<{
   });
 
   const handleJoin = () => {
-    onJoin(initialSettings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
+    // Валидация имени при входе
+    const cleanName = clientValidateInput(name, 'name') ? clientSanitizeInput(name) : 
+                     `Участник ${Math.floor(Math.random() * 1000) + 1}`;
+    
+    onJoin(initialSettings, cleanName);
   };
 
   const toggleSetting = (type: keyof DeviceSettings) => {
@@ -118,6 +180,15 @@ const DeviceSelection: React.FC<{
       ...prev,
       [type]: !prev[type]
     }));
+  };
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Фильтрация на лету
+    const filtered = value.replace(/[<>"'`&]/g, '');
+    if (filtered.length <= 50) {
+      setName(filtered);
+    }
   };
 
   return (
@@ -138,7 +209,7 @@ const DeviceSelection: React.FC<{
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={handleNameChange}
             placeholder="Введите ваше имя"
             className={styles.nameInput}
             maxLength={50}
@@ -455,38 +526,58 @@ const Room: React.FC = () => {
     });
   }, [allParticipants, mediaState, peerMediaElements, clients, screenShareParticipant]);
 
-  // Стабильные ссылки на обработчики
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessageInput(e.target.value);
-  }, []);
-
   /**
-   * Получение отображаемого имени пользователя
+   * Получение отображаемого имени пользователя (с экранированием)
    */
   const getUserDisplayName = useCallback((userId: string): string => {
-    if (userId === LOCAL_VIDEO) return userName || 'Вы';
-    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
+    if (userId === LOCAL_VIDEO) return escapeHtml(userName || 'Вы');
+    
+    const name = userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
+    
+    // Экранируем перед отображением
+    return escapeHtml(name);
   }, [userName, userNumbers, userNames]);
 
   /**
-   * Получение метки отправителя сообщения
+   * Получение метки отправителя сообщения (с экранированием)
    */
   const getSenderLabel = useCallback((senderId: string): string => {
-    if (senderId === socket.id) return userName || 'Вы';
-    return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
+    if (senderId === socket.id) return escapeHtml(userName || 'Вы');
+    const name = userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
+    return escapeHtml(name);
   }, [userName, userNumbers, userNames]);
+
+  // Стабильные ссылки на обработчики
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Базовая фильтрация на лету
+    const filtered = value.replace(/[<>"'`&]/g, '');
+    if (filtered.length <= 1000) {
+      setMessageInput(filtered);
+    }
+  }, []);
 
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
+    
+    // Валидация на клиенте
+    if (!clientValidateInput(trimmedMessage, 'message')) {
+      alert('Сообщение содержит недопустимые символы или слишком длинное');
+      return;
+    }
+    
     if (trimmedMessage && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
+      const cleanMessage = clientSanitizeInput(trimmedMessage);
+      const cleanUserName = clientSanitizeInput(userName);
+      
       const newMessage: ChatMessage = {
         id: messageId,
-        text: trimmedMessage,
+        text: cleanMessage,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
         sender: socket.id || 'unknown',
-        userName: userName
+        userName: cleanUserName
       };
       
       if (addChatMessage) {
@@ -498,10 +589,10 @@ const Room: React.FC = () => {
       // Отправляем сообщение с именем пользователя
       socket.emit(ACTIONS.CHAT_MESSAGE, {
         roomID,
-        message: trimmedMessage,
+        message: cleanMessage,
         id: messageId,
         timestamp: new Date().toISOString(),
-        userName: userName
+        userName: cleanUserName
       });
     }
   }, [messageInput, roomID, addChatMessage, userName]);
@@ -630,7 +721,16 @@ const Room: React.FC = () => {
     const file = e.target.files?.[0];
     if (file && roomID) {
       const fileId = `${socket.id}-${Date.now()}`;
-      const fileNameWithIcon = `📄 ${file.name}`;
+      const fileName = file.name;
+      
+      // Проверка на XSS в имени файла
+      if (detectXssPattern(fileName)) {
+        console.warn('[SECURITY] XSS attempt in filename blocked');
+        alert('Имя файла содержит недопустимые символы');
+        return;
+      }
+      
+      const fileNameWithIcon = `📄 ${fileName}`;
       const newMessage: ChatMessage = {
         id: fileId,
         text: fileNameWithIcon,
@@ -663,24 +763,31 @@ const Room: React.FC = () => {
    * Функция обновления имени
    */
   const handleSaveName = useCallback(() => {
-    if (userName.trim()) {
-      const newName = userName.trim();
-      setUserName(newName);
+    // Валидация имени на клиенте
+    if (!clientValidateInput(userName, 'name')) {
+      alert('Имя содержит недопустимые символы или слишком длинное');
+      return;
+    }
+    
+    const cleanName = clientSanitizeInput(userName);
+    
+    if (cleanName.trim()) {
+      setUserName(cleanName);
       
       // Отправляем обновление имени на сервер
       socket.emit('update-user-name', {
         roomID: roomID || '',
-        userName: newName
+        userName: cleanName
       });
       
       // Обновляем локально
-      setUserNames(prev => ({ ...prev, [socket.id as string]: newName }));
+      setUserNames(prev => ({ ...prev, [socket.id as string]: cleanName }));
       setShowNameInput(false);
       
       // Показываем уведомление
       setNotifications(prev => [...prev, {
         id: `name-updated-${Date.now()}`,
-        message: `Имя изменено на "${newName}"`,
+        message: `Имя изменено на "${cleanName}"`,
         type: 'system',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
@@ -755,7 +862,7 @@ const Room: React.FC = () => {
         setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
       }
       
-      // Добавляем сообщение в чат
+      // Добавляем сообщение в чат (сообщения уже очищены на сервере)
       const newMessage: ChatMessage = {
         id: msg.id,
         text: msg.message,
@@ -870,7 +977,7 @@ const Room: React.FC = () => {
       if (peerID !== socket.id) {
         setNotifications(prev => [...prev, {
           id: `join-${peerID}-${Date.now()}`,
-          message: `${joinedUserName} подключился`,
+          message: `${escapeHtml(joinedUserName)} подключился`,
           type: 'join',
           timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
@@ -878,7 +985,11 @@ const Room: React.FC = () => {
       
       // Обновляем список участников если пришел
       if (participants) {
-        setAllParticipants(participants);
+        const sanitizedParticipants = participants.map(p => ({
+          ...p,
+          name: escapeHtml(p.name)
+        }));
+        setAllParticipants(sanitizedParticipants);
       }
     };
 
@@ -895,39 +1006,47 @@ const Room: React.FC = () => {
     }) => {
       setNotifications(prev => [...prev, {
         id: `leave-${peerID}-${Date.now()}`,
-        message: `${leftUserName} отключился`,
+        message: `${escapeHtml(leftUserName)} отключился`,
         type: 'leave',
         timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
       
       // Обновляем список участников
       if (participants) {
-        setAllParticipants(participants);
+        const sanitizedParticipants = participants.map(p => ({
+          ...p,
+          name: escapeHtml(p.name)
+        }));
+        setAllParticipants(sanitizedParticipants);
       }
     };
 
     // Добавляем обработчик для списка участников
     const handleParticipantsList = (participants: Participant[]) => {
-      setAllParticipants(participants);
+      const sanitizedParticipants = participants.map(p => ({
+        ...p,
+        name: escapeHtml(p.name)
+      }));
+      setAllParticipants(sanitizedParticipants);
     };
 
     // Обработчик обновления имени пользователя
     const handleUserNameUpdated = ({ peerID, userName: updatedName }: { peerID: string; userName: string }) => {
       console.log(`User ${peerID} updated name to ${updatedName}`);
       
-      // Обновляем имя в состоянии
+      // Обновляем имя в состоянии (уже экранировано на сервере)
       setUserNames(prev => ({ ...prev, [peerID]: updatedName }));
       
       // Обновляем в списке участников
       setAllParticipants(prev => 
-        prev.map(p => p.id === peerID ? { ...p, name: updatedName } : p)
+        prev.map(p => p.id === peerID ? { ...p, name: escapeHtml(updatedName) } : p)
       );
       
       // Показываем уведомление (только если это не текущий пользователь)
       if (peerID !== socket.id) {
         setNotifications(prev => [...prev, {
           id: `name-update-${peerID}-${Date.now()}`,
-          message: `${updatedName} изменил(а) имя`,
+          message: `${escapeHtml(updatedName)} изменил(а) имя`,
           type: 'system',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
@@ -1361,9 +1480,8 @@ const Room: React.FC = () => {
                     className={`${styles.messageBubble} ${
                       msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
                     }`}
-                  >
-                    {msg.text}
-                  </div>
+                    dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text) }}
+                  />
                   <div className={styles.messageTime}>
                     {msg.timestamp} {msg.isLocal ? '✓' : ''}
                   </div>
@@ -1390,6 +1508,7 @@ const Room: React.FC = () => {
               placeholder="Введите сообщение..."
               className={styles.chatInput}
               aria-label="Введите сообщение"
+              maxLength={1000}
             />
 
             <input
@@ -1398,6 +1517,7 @@ const Room: React.FC = () => {
               onChange={handleFileChange}
               className={styles.fileInput}
               aria-hidden="true"
+              accept="*/*"
             />
 
             <button
@@ -1433,7 +1553,7 @@ const Room: React.FC = () => {
             <label className={styles.settingsLabel}>
               Ваше имя:
             </label>
-            <div className={styles.currentName}>{userName || 'Не указано'}</div>
+            <div className={styles.currentName}>{escapeHtml(userName || 'Не указано')}</div>
             <button
               onClick={() => setShowNameInput(true)}
               className={styles.changeNameButton}
@@ -1494,7 +1614,13 @@ const Room: React.FC = () => {
             <input
               type="text"
               value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                const filtered = value.replace(/[<>"'`&]/g, '');
+                if (filtered.length <= 50) {
+                  setUserName(filtered);
+                }
+              }}
               placeholder="Введите ваше имя"
               className={styles.nameInputField}
               maxLength={50}

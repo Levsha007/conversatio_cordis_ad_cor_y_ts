@@ -1,3 +1,5 @@
+
+
 /**
  * Константы действий (именованные события) для WebSocket соединения
  * Каждое действие соответствует определённому событию в системе видеоконференций
@@ -35,6 +37,60 @@ export const ACTIONS = {
 
 // Экспорт по умолчанию для обратной совместимости
 export default ACTIONS;
+
+/**
+ * Утилиты для очистки и валидации данных
+ */
+export const sanitizeInput = (input: string): string => {
+  if (!input || typeof input !== 'string') return '';
+  
+  return input
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/`/g, '&#96;')
+    .replace(/&/g, '&amp;')
+    .trim()
+    .substring(0, 1000); // Ограничение длины
+};
+
+export const sanitizeUserName = (name: string): string => {
+  const sanitized = sanitizeInput(name);
+  return sanitized || 'Участник';
+};
+
+export const sanitizeMessage = (message: string): string => {
+  return sanitizeInput(message);
+};
+
+export const validateRoomID = (roomID: string): boolean => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roomID);
+};
+
+export const hasXssPattern = (input: string): boolean => {
+  if (!input || typeof input !== 'string') return false;
+  
+  const xssPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /onerror=/i,
+    /onload=/i,
+    /onclick=/i,
+    /onmouseover=/i,
+    /eval\(/i,
+    /alert\(/i,
+    /document\./i,
+    /window\./i,
+    /\.src\s*=/i,
+    /\.href\s*=/i,
+    /iframe/i,
+    /img.*src/i
+  ];
+  
+  return xssPatterns.some(pattern => pattern.test(input));
+};
 
 /**
  * Типы для работы с действиями
@@ -129,6 +185,7 @@ interface ServerToClientEvents {
   [ACTIONS.CHAT_HISTORY]: (messages: ChatMessage[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
   'user-name-updated': (params: { peerID: string; userName: string }) => void;
+  'error': (params: { message: string }) => void;
 }
 
 // События от клиента к серверу
