@@ -72,6 +72,8 @@ interface ServerToClientEvents {
   }) => void;
   [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
   [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  [ACTIONS.RAISE_HAND]: (params: { peerID: string; userName: string }) => void;
+  [ACTIONS.LOWER_HAND]: (params: { peerID: string; userName: string }) => void;
   
   // Новые события для уведомлений и списка участников
   'user-joined': (params: { 
@@ -117,6 +119,8 @@ interface ClientToServerEvents {
     id?: string;
     timestamp?: string;
   }) => void;
+  [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
+  [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LEAVE]: () => void;
   
   // Новые события для обновления имени и получения списка участников
