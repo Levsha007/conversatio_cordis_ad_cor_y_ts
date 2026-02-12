@@ -44,22 +44,26 @@ export default ACTIONS;
  * Утилиты для очистки и валидации данных
  */
 export const sanitizeInput = (input: string): string => {
+  if (!input) return '';
+  
   return input
+    .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;')
     .trim()
     .substring(0, 1000);
 };
 
 export const sanitizeUserName = (name: string): string => {
+  if (!name) return 'Участник';
   const sanitized = sanitizeInput(name);
   return sanitized || 'Участник';
 };
 
 export const sanitizeMessage = (message: string): string => {
+  if (!message) return '';
   return sanitizeInput(message);
 };
 
@@ -84,30 +88,31 @@ export type ActionValues = typeof ACTIONS[ActionKeys];
 // Действие подключения к комнате
 export type JoinAction = {
   type: typeof ACTIONS.JOIN;
-  room: string;
-  userId?: string;
-  userName?: string;
-  hasMedia?: boolean;
+  room: string; // ID комнаты
+  userId?: string; // Опциональный ID пользователя
+  userName?: string; // Опциональное имя пользователя
+  hasMedia?: boolean; // Флаг наличия медиаустройств
 };
 
 // Действие передачи ICE кандидата
 export type IceCandidateAction = {
   type: typeof ACTIONS.ICE_CANDIDATE;
-  peerID: string;
-  iceCandidate: RTCIceCandidate;
+  peerID: string; // ID участника
+  iceCandidate: RTCIceCandidate; // Данные ICE кандидата
 };
 
 // Событие прикрепления файла
 export type FileAttachedAction = {
   type: typeof ACTIONS.FILE_ATTACHED;
-  roomID: string;
-  fileName: string;
-  sender: string;
-  timestamp: string;
+  roomID: string; // ID комнаты
+  fileName: string; // Имя файла
+  sender: string; // Отправитель
+  timestamp: string; // Временная метка
 };
 
 /**
  * Объединённый тип всех возможных действий
+ * Можно расширять добавлением новых типов действий
  */
 export type SocketAction =
   | JoinAction
@@ -127,27 +132,27 @@ export type ActionHandler<T extends SocketAction> = (action: T) => void;
 
 // Сообщение чата
 interface ChatMessage {
-  id: string;
-  sender: string;
-  message: string;
-  timestamp: string;
-  userNumber?: number;
-  userName?: string;
+  id: string; // Уникальный ID сообщения
+  sender: string; // ID отправителя
+  message: string; // Текст сообщения
+  timestamp: string; // Временная метка
+  userNumber?: number; // Номер пользователя
+  userName?: string; // Имя пользователя
 }
 
 // Сообщение о прикреплённом файле
 interface FileAttachment {
-  id: string;
-  sender: string;
-  fileName: string;
-  timestamp: string;
+  id: string; // Уникальный ID
+  sender: string; // ID отправителя
+  fileName: string; // Имя файла
+  timestamp: string; // Временная метка
 }
 
 // События от сервера к клиенту
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: {
-    peerID: string;
-    createOffer: boolean;
+  [ACTIONS.ADD_PEER]: (params: { 
+    peerID: string; 
+    createOffer: boolean; 
     userNumber?: number;
     userName?: string;
     hasMedia?: boolean;
@@ -165,7 +170,7 @@ interface ServerToClientEvents {
 
 // События от клиента к серверу
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: {
+  [ACTIONS.JOIN]: (params: { 
     room: string;
     userName?: string;
     hasMedia?: boolean;

@@ -11,12 +11,12 @@ import { ACTIONS, sanitizeUserName, sanitizeMessage, validateRoomID } from './so
  * Интерфейс для сообщений чата
  */
 interface ChatMessage {
-  id: string;
-  sender: string;
-  message: string;
-  timestamp: string;
-  userNumber?: number;
-  userName?: string;
+  id: string;          // Уникальный ID сообщения
+  sender: string;      // ID отправителя
+  message: string;     // Текст сообщения
+  timestamp: string;   // Временная метка
+  userNumber?: number; // Номер пользователя
+  userName?: string;   // Имя пользователя
 }
 
 // Создаем Express приложение и HTTP сервер
@@ -25,6 +25,7 @@ const server = createServer(app);
 
 // Добавляем security headers middleware
 app.use((req, res, next) => {
+  // Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
@@ -36,10 +37,13 @@ app.use((req, res, next) => {
     "font-src 'self'; " +
     "frame-ancestors 'none';"
   );
+  
+  // XSS Protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   
+  // Запрет кэширования для API
   if (req.path.includes('/socket.io/')) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -53,7 +57,7 @@ app.use((req, res, next) => {
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor-y-ts.vercel.app",
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app", 
       "http://localhost:3000"
     ],
     methods: ["GET", "POST"],
@@ -74,10 +78,9 @@ const roomUserCounters = new Map<string, number>();
 const roomUserNames = new Map<string, Map<string, string>>();
 // Хранилище для всех участников
 const allParticipants = new Map<string, Set<string>>();
-// Хранилище для rate limiting сообщений
+
+// Rate limiting для сообщений
 const messageCooldown = new Map<string, number>();
-// Хранилище комнат пользователя
-const userRooms = new Map<string, Set<string>>();
 
 /**
  * Функция очистки истории чата пустой комнаты
@@ -132,7 +135,8 @@ function setUserName(roomID: string, socketId: string, userName: string): void {
     roomUserNames.set(roomID, new Map());
   }
   
-  roomUserNames.get(roomID)!.set(socketId, userName);
+  const cleanName = sanitizeUserName(userName);
+  roomUserNames.get(roomID)!.set(socketId, cleanName);
 }
 
 /**
@@ -181,7 +185,7 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
     }
   });
 
-  // Автоматически опускаем руку при выходе
+  // Автоматически опускаем руку при отключении
   io.to(roomID).emit(ACTIONS.LOWER_HAND, {
     peerID: socketId,
     userName: userName
@@ -193,6 +197,7 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
   }
 
   if (!isDisconnecting) {
+    // Только если это не автоматическое отключение, выходим из комнаты
     io.sockets.sockets.get(socketId)?.leave(roomID);
   }
 
@@ -208,8 +213,6 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
  */
 io.on('connection', (socket: Socket) => {
   console.log('New connection:', socket.id);
-  
-  userActivity.set(socket.id, Date.now());
 
   /**
    * Обработчик входа в комнату
@@ -223,23 +226,6 @@ io.on('connection', (socket: Socket) => {
       socket.emit('error', { message: 'Неверный формат комнаты' });
       return;
     }
-    
-    // Очистка имени пользователя
-    const cleanUserName = sanitizeUserName(userName || '');
-    
-    // Проверка на флуд комнатами
-    const maxRoomsPerUser = 5;
-    const userRoomsSet = userRooms.get(socket.id) || new Set();
-    
-    if (userRoomsSet.size >= maxRoomsPerUser) {
-      socket.emit('error', {
-        message: 'Вы подключены к слишком большому количеству комнат. Пожалуйста, покиньте некоторые.'
-      });
-      return;
-    }
-    
-    userRoomsSet.add(roomID);
-    userRooms.set(socket.id, userRoomsSet);
 
     // Добавляем участника в общий список
     if (!allParticipants.has(roomID)) {
@@ -250,12 +236,9 @@ io.on('connection', (socket: Socket) => {
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
-    // Сохраняем имя пользователя
-    if (cleanUserName) {
-      setUserName(roomID, socket.id, cleanUserName);
-    } else {
-      setUserName(roomID, socket.id, `Участник ${userNumber}`);
-    }
+    // Сохраняем имя пользователя (очищенное)
+    const cleanUserName = userName ? sanitizeUserName(userName) : `Участник ${userNumber}`;
+    setUserName(roomID, socket.id, cleanUserName);
 
     const currentUserName = getUserName(roomID, socket.id);
 
@@ -282,6 +265,7 @@ io.on('connection', (socket: Socket) => {
         userName: currentUserName
       });
       
+      // Отправляем новому пользователю информацию о существующих участниках
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
         createOffer: true,
@@ -290,13 +274,16 @@ io.on('connection', (socket: Socket) => {
       });
     });
 
+    // Присоединяемся к комнате
     socket.join(roomID);
     console.log(`User ${socket.id} (${currentUserName}) joined room ${roomID} as Participant ${userNumber}`);
 
+    // Если история чата ещё не существует, создаем её
     if (!roomChats.has(roomID)) {
       roomChats.set(roomID, []);
     }
 
+    // Отправляем историю чата текущему пользователю
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
   });
 
@@ -318,33 +305,33 @@ io.on('connection', (socket: Socket) => {
     const now = Date.now();
     const lastMessage = messageCooldown.get(socket.id) || 0;
     
-    if (now - lastMessage < 1000) {
-      socket.emit('error', { message: 'Слишком много сообщений. Подождите 1 секунду.' });
+    if (now - lastMessage < 500) { // 500ms между сообщениями
       return;
     }
-    
     messageCooldown.set(socket.id, now);
-    
-    // Очистка данных
-    const cleanMessage = sanitizeMessage(message);
-    const cleanUserName = userName ? sanitizeUserName(userName) : undefined;
 
     const userNumber = getUserNumber(roomID, socket.id);
     const currentUserName = getUserName(roomID, socket.id);
 
-    if (cleanUserName && cleanUserName !== currentUserName) {
-      setUserName(roomID, socket.id, cleanUserName);
+    // Если передано новое имя, обновляем его (очищенное)
+    if (userName && userName !== currentUserName) {
+      const cleanName = sanitizeUserName(userName);
+      setUserName(roomID, socket.id, cleanName);
       
+      // Отправляем всем обновление имени
       io.to(roomID).emit('user-name-updated', {
         peerID: socket.id,
         userName: getUserName(roomID, socket.id)
       });
     }
 
+    // Очищаем сообщение для хранения
+    const cleanMessage = sanitizeMessage(message);
+
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
       sender: socket.id,
-      message: cleanMessage,
+      message: cleanMessage, // Сохраняем очищенное сообщение
       timestamp: timestamp || new Date().toISOString(),
       userNumber: userNumber,
       userName: getUserName(roomID, socket.id)
@@ -362,6 +349,7 @@ io.on('connection', (socket: Socket) => {
 
     roomMessages.push(chatMessage);
     
+    // Рассылаем всем участникам
     io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, {
       ...chatMessage,
       userNumber: userNumber,
@@ -377,16 +365,52 @@ io.on('connection', (socket: Socket) => {
     
     if (!validate(roomID)) return;
     
+    // Очищаем имя пользователя
     const cleanUserName = sanitizeUserName(userName);
     setUserName(roomID, socket.id, cleanUserName);
     const currentUserName = getUserName(roomID, socket.id);
     
+    // Отправляем всем обновление имени
     io.to(roomID).emit('user-name-updated', {
       peerID: socket.id,
       userName: currentUserName
     });
     
     console.log(`User ${socket.id} updated name to ${currentUserName}`);
+  });
+
+  /**
+   * Обработчик поднятия руки
+   */
+  socket.on(ACTIONS.RAISE_HAND, ({ roomID }: { roomID: string }) => {
+    if (!validate(roomID)) return;
+    
+    const userName = getUserName(roomID, socket.id);
+    
+    // Рассылаем всем участникам комнаты
+    io.to(roomID).emit(ACTIONS.RAISE_HAND, {
+      peerID: socket.id,
+      userName: userName
+    });
+    
+    console.log(`User ${socket.id} (${userName}) raised hand in room ${roomID}`);
+  });
+
+  /**
+   * Обработчик опускания руки
+   */
+  socket.on(ACTIONS.LOWER_HAND, ({ roomID }: { roomID: string }) => {
+    if (!validate(roomID)) return;
+    
+    const userName = getUserName(roomID, socket.id);
+    
+    // Рассылаем всем участникам комнаты
+    io.to(roomID).emit(ACTIONS.LOWER_HAND, {
+      peerID: socket.id,
+      userName: userName
+    });
+    
+    console.log(`User ${socket.id} (${userName}) lowered hand in room ${roomID}`);
   });
 
   /**
@@ -420,45 +444,8 @@ io.on('connection', (socket: Socket) => {
     );
 
     realRooms.forEach(roomID => {
-      userRooms.get(socket.id)?.delete(roomID);
       leaveRoom(roomID, socket.id, false);
     });
-    
-    if (userRooms.get(socket.id)?.size === 0) {
-      userRooms.delete(socket.id);
-    }
-  });
-
-  /**
-   * Обработчик поднятия руки
-   */
-  socket.on(ACTIONS.RAISE_HAND, ({ roomID }: { roomID: string }) => {
-    if (!validate(roomID)) return;
-    
-    const userName = getUserName(roomID, socket.id);
-    
-    io.to(roomID).emit(ACTIONS.RAISE_HAND, {
-      peerID: socket.id,
-      userName: userName
-    });
-    
-    console.log(`User ${socket.id} (${userName}) raised hand in room ${roomID}`);
-  });
-
-  /**
-   * Обработчик опускания руки
-   */
-  socket.on(ACTIONS.LOWER_HAND, ({ roomID }: { roomID: string }) => {
-    if (!validate(roomID)) return;
-    
-    const userName = getUserName(roomID, socket.id);
-    
-    io.to(roomID).emit(ACTIONS.LOWER_HAND, {
-      peerID: socket.id,
-      userName: userName
-    });
-    
-    console.log(`User ${socket.id} (${userName}) lowered hand in room ${roomID}`);
   });
 
   /**
@@ -494,13 +481,6 @@ io.on('connection', (socket: Socket) => {
   });
 
   /**
-   * Обработчик активности пользователя
-   */
-  socket.on('activity', () => {
-    userActivity.set(socket.id, Date.now());
-  });
-
-  /**
    * Обработчик отключения (перед фактическим отключением)
    */
   socket.on('disconnecting', (reason) => {
@@ -508,23 +488,13 @@ io.on('connection', (socket: Socket) => {
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
-      roomID !== socket.id && validate(roomID) && version(roomID) === 4
+      roomID !== socket.id && validate(roomID)
     );
 
+    // Для каждой комнаты вызываем leaveRoom с флагом disconnecting
     realRooms.forEach(roomID => {
-      const userName = getUserName(roomID, socket.id);
-      io.to(roomID).emit(ACTIONS.LOWER_HAND, {
-        peerID: socket.id,
-        userName: userName
-      });
-      
-      userRooms.get(socket.id)?.delete(roomID);
       leaveRoom(roomID, socket.id, true);
     });
-    
-    if (userRooms.get(socket.id)?.size === 0) {
-      userRooms.delete(socket.id);
-    }
   });
 
   /**
@@ -532,13 +502,11 @@ io.on('connection', (socket: Socket) => {
    */
   socket.on('disconnect', (reason) => {
     console.log(`User disconnected: ${socket.id}, reason: ${reason}`);
-    
-    userActivity.delete(socket.id);
     messageCooldown.delete(socket.id);
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
-      roomID !== socket.id && validate(roomID) && version(roomID) === 4
+      roomID !== socket.id && validate(roomID)
     );
 
     realRooms.forEach(roomID => {
@@ -546,26 +514,6 @@ io.on('connection', (socket: Socket) => {
     });
   });
 });
-
-// Хранилище для отслеживания активности пользователей
-const userActivity = new Map<string, number>();
-
-// Периодическая проверка на неактивных пользователей
-setInterval(() => {
-  const now = Date.now();
-  const timeout = 5 * 60 * 1000; // 5 минут
-  
-  userActivity.forEach((lastActive, userId) => {
-    if (now - lastActive > timeout) {
-      const socket = io.sockets.sockets.get(userId);
-      if (socket) {
-        console.log(`Auto-disconnecting inactive user: ${userId}`);
-        socket.disconnect();
-      }
-      userActivity.delete(userId);
-    }
-  });
-}, 60000); // Проверка каждую минуту
 
 /**
  * Запуск сервера

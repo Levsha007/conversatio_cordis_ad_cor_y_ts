@@ -43,53 +43,6 @@ interface Participant {
 }
 
 /**
- * Интерфейс для состояния медиа (из useWebRTC)
- */
-interface MediaState {
-  audio: boolean;
-  video: boolean;
-  screen: boolean;
-}
-
-/**
- * Клиентские утилиты для очистки и валидации
- */
-const clientSanitizeInput = (input: string): string => {
-  return input
-    .replace(/[<>"'`]/g, '')
-    .trim()
-    .substring(0, 500);
-};
-
-const clientValidateInput = (input: string, type: 'name' | 'message'): boolean => {
-  if (!input || typeof input !== 'string') return false;
-  if (input.trim().length === 0) return false;
-  if (type === 'name' && input.length > 50) return false;
-  if (type === 'message' && input.length > 1000) return false;
-  
-  const xssPatterns = [
-    /<script/i,
-    /javascript:/i,
-    /onerror=/i,
-    /onload=/i,
-    /onclick=/i,
-    /eval\(/i,
-    /alert\(/i,
-    /document\./i,
-    /window\./i,
-    /\.src\s*=/i
-  ];
-  
-  return !xssPatterns.some(pattern => pattern.test(input));
-};
-
-const escapeHtml = (text: string): string => {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-};
-
-/**
  * Кастомный хук для определения мобильного устройства
  */
 const useIsMobile = (): boolean => {
@@ -134,6 +87,23 @@ const useTabSync = (roomId: string) => {
 };
 
 /**
+ * Функция экранирования HTML для безопасного отображения пользовательского ввода
+ */
+const escapeHtml = (text: string): string => {
+  if (!text) return '';
+  
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  
+  return text.replace(/[&<>"']/g, (char) => map[char]);
+};
+
+/**
  * Компонент выбора устройств перед входом в комнату
  */
 const DeviceSelection: React.FC<{
@@ -146,9 +116,7 @@ const DeviceSelection: React.FC<{
   });
 
   const handleJoin = () => {
-    const cleanName = clientValidateInput(name, 'name') ? clientSanitizeInput(name) :
-      `Участник ${Math.floor(Math.random() * 1000) + 1}`;
-    onJoin(initialSettings, cleanName);
+    onJoin(initialSettings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
   };
 
   const toggleSetting = (type: keyof DeviceSettings) => {
@@ -162,13 +130,13 @@ const DeviceSelection: React.FC<{
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка перед входом</h2>
-
+        
         <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(179, 0, 0, 0.1)', borderRadius: '8px' }}>
           <p style={{ color: '#ffffff', fontWeight: 'bold' }}>
             ⚠️ Для изменения выбора устройств потребуется перезагрузка страницы
           </p>
         </div>
-
+        
         <div className={styles.nameInputSection}>
           <label className={styles.nameLabel}>Ваше имя (необязательно):</label>
           <input
@@ -185,7 +153,7 @@ const DeviceSelection: React.FC<{
         </div>
 
         <p>Выберите устройства для использования:</p>
-
+        
         <div className={styles.deviceOptions}>
           <div className={styles.deviceOptionRow}>
             <div className={styles.deviceStatus}>
@@ -239,8 +207,8 @@ const DeviceSelection: React.FC<{
  * Функция расчета расположения видео элементов (обычный режим)
  */
 function calculateLayout(
-  clientsCount: number = 1,
-  isMobile: boolean,
+  clientsCount: number = 1, 
+  isMobile: boolean, 
   fullscreenParticipant: string | null = null
 ): LayoutItem[] {
   if (fullscreenParticipant) {
@@ -306,13 +274,13 @@ function calculateLayoutWithScreenShare(
     }));
   }
 
-  const screenShareClient = screenShareParticipant && clients.includes(screenShareParticipant)
-    ? screenShareParticipant
+  const screenShareClient = screenShareParticipant && clients.includes(screenShareParticipant) 
+    ? screenShareParticipant 
     : null;
-
+  
   if (screenShareClient) {
     const otherClients = clients.filter(client => client !== screenShareClient);
-
+    
     if (isMobile) {
       return clients.map(client => {
         if (client === screenShareClient) {
@@ -326,9 +294,9 @@ function calculateLayoutWithScreenShare(
           const totalOthers = otherClients.length;
           return {
             clientID: client,
-            layout: {
-              width: `${100 / Math.min(totalOthers, 3)}%`,
-              height: '30%'
+            layout: { 
+              width: `${100 / Math.min(totalOthers, 3)}%`, 
+              height: '30%' 
             },
             isScreenShare: false
           };
@@ -347,9 +315,9 @@ function calculateLayoutWithScreenShare(
           const totalOthers = otherClients.length;
           return {
             clientID: client,
-            layout: {
-              width: '30%',
-              height: `${100 / Math.min(totalOthers, 4)}%`
+            layout: { 
+              width: '30%', 
+              height: `${100 / Math.min(totalOthers, 4)}%` 
             },
             isScreenShare: false
           };
@@ -357,7 +325,7 @@ function calculateLayoutWithScreenShare(
       });
     }
   }
-
+  
   const layout = calculateLayout(clients.length, isMobile, fullscreenParticipant);
   return clients.map((client, index) => ({
     clientID: client,
@@ -375,6 +343,7 @@ const Room: React.FC = () => {
   useTabSync(roomID || '');
   const isMobile = useIsMobile();
 
+  // Использование кастомного хука WebRTC
   const {
     clients,
     provideMediaRef,
@@ -400,6 +369,7 @@ const Room: React.FC = () => {
     toggleParticipantAudio
   } = useWebRTC(roomID || '');
 
+  // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
   const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
@@ -431,6 +401,7 @@ const Room: React.FC = () => {
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
 
+  // Определяем, кто ведет демонстрацию экрана
   const screenShareParticipant = useMemo(() => {
     if (mediaState.screen) {
       return LOCAL_VIDEO;
@@ -439,8 +410,8 @@ const Room: React.FC = () => {
     for (const clientID of clients) {
       if (clientID !== LOCAL_VIDEO) {
         const stream = peerMediaElements.current[clientID]?.srcObject as MediaStream;
-        if (stream && stream.getVideoTracks().some(track =>
-          track.label.toLowerCase().includes('screen') ||
+        if (stream && stream.getVideoTracks().some(track => 
+          track.label.toLowerCase().includes('screen') || 
           track.label.toLowerCase().includes('desktop') ||
           track.label.toLowerCase().includes('window')
         )) {
@@ -452,16 +423,18 @@ const Room: React.FC = () => {
     return null;
   }, [clients, mediaState.screen, peerMediaElements]);
 
-  const videoLayouts = useMemo(() =>
+  // Используем новый расчет лейаута с поддержкой демонстрации экрана
+  const videoLayouts = useMemo(() => 
     calculateLayoutWithScreenShare(
-      clients,
-      isMobile,
+      clients, 
+      isMobile, 
       screenShareParticipant,
       fullscreenParticipant
     ),
     [clients, isMobile, screenShareParticipant, fullscreenParticipant]
   );
 
+  // Обновляем список участников
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => ({
       id: participant.id,
@@ -473,52 +446,38 @@ const Room: React.FC = () => {
     }));
   }, [allParticipants, screenShareParticipant, raisedHands]);
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const filtered = value.replace(/[<>"'`]/g, '');
-    if (filtered.length <= 1000) {
-      setMessageInput(filtered);
-    }
-  }, []);
-
+  /**
+   * Получение отображаемого имени пользователя
+   */
   const getUserDisplayName = useCallback((userId: string): string => {
     if (userId === LOCAL_VIDEO) return userName || 'Вы';
-    
-    const name = userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
-    
-    return name
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
+  /**
+   * Получение метки отправителя сообщения
+   */
   const getSenderLabel = useCallback((senderId: string): string => {
     if (senderId === socket.id) return userName || 'Вы';
     return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
+  /**
+   * Обработчик отправки сообщения
+   */
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
     
-    if (!clientValidateInput(trimmedMessage, 'message')) {
-      alert('Сообщение содержит недопустимые символы или слишком длинное');
-      return;
-    }
-    
     if (trimmedMessage && roomID) {
       const messageId = `${socket.id}-${Date.now()}`;
-      const cleanMessage = clientSanitizeInput(trimmedMessage);
-      const cleanUserName = clientSanitizeInput(userName);
       
       const newMessage: ChatMessage = {
         id: messageId,
-        text: cleanMessage,
+        text: trimmedMessage,
         isLocal: true,
         timestamp: new Date().toLocaleTimeString(),
         sender: socket.id || 'unknown',
-        userName: cleanUserName
+        userName: userName
       };
       
       if (addChatMessage) {
@@ -529,13 +488,20 @@ const Room: React.FC = () => {
       
       socket.emit(ACTIONS.CHAT_MESSAGE, {
         roomID,
-        message: cleanMessage,
+        message: trimmedMessage,
         id: messageId,
         timestamp: new Date().toISOString(),
-        userName: cleanUserName
+        userName: userName
       });
     }
   }, [messageInput, roomID, addChatMessage, userName]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= 1000) {
+      setMessageInput(value);
+    }
+  }, []);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -543,12 +509,38 @@ const Room: React.FC = () => {
     }
   }, [handleSendMessage]);
 
-  useEffect(() => {
-    if (getChatMessages) {
-      setMessages(getChatMessages());
+  /**
+   * Обработчик поднятия/опускания руки
+   */
+  const toggleHandRaise = useCallback(() => {
+    if (!roomID) return;
+    
+    if (isHandRaised) {
+      socket.emit(ACTIONS.LOWER_HAND, { roomID });
+      setIsHandRaised(false);
+      setRaisedHands(prev => {
+        const newSet = new Set(prev);
+        if (socket.id) {
+          newSet.delete(socket.id);
+        }
+        return newSet;
+      });
+    } else {
+      socket.emit(ACTIONS.RAISE_HAND, { roomID });
+      setIsHandRaised(true);
+      setRaisedHands(prev => {
+        const newSet = new Set(prev);
+        if (socket.id) {
+          newSet.add(socket.id);
+        }
+        return newSet;
+      });
     }
-  }, [getChatMessages]);
+  }, [roomID, isHandRaised]);
 
+  /**
+   * Обработчик выбора устройств
+   */
   const handleDeviceSelection = async (settings: DeviceSettings, name: string) => {
     setShowDeviceSelection(false);
     setUserName(name);
@@ -558,6 +550,9 @@ const Room: React.FC = () => {
     setDevicesInitialized(true);
   };
 
+  /**
+   * Переключение полноэкранного режима для участника
+   */
   const toggleFullscreen = useCallback((clientID: string) => {
     if (fullscreenParticipant === clientID) {
       setFullscreenParticipant(null);
@@ -576,6 +571,9 @@ const Room: React.FC = () => {
     }
   }, [fullscreenParticipant]);
 
+  /**
+   * Обработчик выхода из полноэкранного режима
+   */
   const handleExitFullscreen = useCallback(() => {
     setFullscreenParticipant(null);
     if (document.fullscreenElement) {
@@ -583,6 +581,9 @@ const Room: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Копирование ссылки на комнату в буфер обмена
+   */
   const handleCopyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -594,6 +595,9 @@ const Room: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Выход из комнаты с подтверждением
+   */
   const handleLeaveRoom = useCallback(() => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       if (isHandRaised && roomID) {
@@ -603,12 +607,18 @@ const Room: React.FC = () => {
     }
   }, [navigate, isHandRaised, roomID]);
 
+  /**
+   * Повторная попытка подключения
+   */
   const handleRetry = useCallback(async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   }, [reconnect]);
 
+  /**
+   * Запуск демонстрации экрана
+   */
   const handleStartScreenShare = useCallback(async () => {
     try {
       await startScreenShare();
@@ -626,53 +636,59 @@ const Room: React.FC = () => {
     }
   }, [startScreenShare]);
 
+  /**
+   * Остановка демонстрации экрана
+   */
   const handleStopScreenShare = useCallback(() => {
     stopScreenShare();
   }, [stopScreenShare]);
 
+  /**
+   * Обработчик демонстрации экрана
+   */
   const handleScreenShare = useCallback(async () => {
     if (mediaState.screen) {
       handleStopScreenShare();
     } else {
+      if (isHandRaised && roomID) {
+        toggleHandRaise();
+      }
       try {
-        if (isHandRaised && roomID) {
-          toggleHandRaise();
-        }
         await handleStartScreenShare();
       } catch (err) {
         console.error('Ошибка демонстрации экрана:', err);
       }
     }
-  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare, isHandRaised, roomID]);
+  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare, isHandRaised, roomID, toggleHandRaise]);
 
-  const toggleHandRaise = useCallback(() => {
-    if (!roomID) return; // Используем roomID вместо safeRoomID
-    
-    const mySocketId = socket.id;
-    if (!mySocketId) {
-      console.warn('Socket ID не доступен');
-      return;
-    }
-    
-    if (isHandRaised) {
-      socket.emit(ACTIONS.LOWER_HAND, { roomID });
-      setIsHandRaised(false);
-      setRaisedHands(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(mySocketId);
-        return newSet;
+  /**
+   * Обработчик сохранения имени
+   */
+  const handleSaveName = useCallback(() => {
+    if (userName.trim()) {
+      const newName = userName.trim();
+      setUserName(newName);
+      
+      socket.emit('update-user-name', {
+        roomID: roomID || '',
+        userName: newName
       });
-    } else {
-      socket.emit(ACTIONS.RAISE_HAND, { roomID });
-      setIsHandRaised(true);
-      setRaisedHands(prev => {
-        const newSet = new Set(prev);
-        newSet.add(mySocketId);
-        return newSet;
-      });
+      
+      setUserNames(prev => ({ ...prev, [socket.id as string]: newName }));
+      setShowNameInput(false);
+      
+      setNotifications(prev => [...prev, {
+        id: `name-updated-${Date.now()}`,
+        message: `Имя изменено на "${newName}"`,
+        type: 'system',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
     }
-  }, [roomID, isHandRaised]);
+  }, [userName, roomID]);
 
+  /**
+   * Обработчик выбора файла
+   */
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && roomID) {
@@ -706,40 +722,21 @@ const Room: React.FC = () => {
     }
   }, [roomID, addChatMessage, userName]);
 
-  const handleSaveName = useCallback(() => {
-    if (!clientValidateInput(userName, 'name')) {
-      alert('Имя содержит недопустимые символы или слишком длинное');
-      return;
+  // Инициализация сообщений при монтировании
+  useEffect(() => {
+    if (getChatMessages) {
+      setMessages(getChatMessages());
     }
-    
-    const cleanName = clientSanitizeInput(userName);
-    
-    if (cleanName.trim()) {
-      setUserName(cleanName);
-      
-      socket.emit('update-user-name', {
-        roomID: roomID || '',
-        userName: cleanName
-      });
-      
-      setUserNames(prev => ({ ...prev, [socket.id as string]: cleanName }));
-      setShowNameInput(false);
-      
-      setNotifications(prev => [...prev, {
-        id: `name-updated-${Date.now()}`,
-        message: `Имя изменено на "${cleanName}"`,
-        type: 'system',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
-    }
-  }, [userName, roomID]);
+  }, [getChatMessages]);
 
+  // Автопрокрутка чата
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // Обработчик события выхода из полноэкранного режима
   useEffect(() => {
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
@@ -754,9 +751,10 @@ const Room: React.FC = () => {
     };
   }, []);
 
+  // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName: peerUserName }: {
-      peerID: string;
+    const handleAddPeer = ({ peerID, createOffer, userNumber, userName: peerUserName }: { 
+      peerID: string; 
       createOffer: boolean;
       userNumber?: number;
       userName?: string;
@@ -782,85 +780,18 @@ const Room: React.FC = () => {
         delete newNames[peerID];
         return newNames;
       });
-      setRaisedHands(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(peerID);
-        return newSet;
-      });
-    };
-
-    const handleChatMessage = (msg: {
-      id: string;
-      message: string;
-      sender: string;
-      timestamp: string;
-      userNumber?: number;
-      userName?: string;
-    }) => {
-      if (msg.userNumber && msg.sender !== socket.id) {
-        setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
-      }
-      if (msg.userName && msg.sender !== socket.id) {
-        setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
-      }
-      
-      const newMessage: ChatMessage = {
-        id: msg.id,
-        text: msg.message,
-        isLocal: msg.sender === socket.id,
-        timestamp: new Date(msg.timestamp).toLocaleTimeString(),
-        sender: msg.sender,
-        userName: msg.userName || getSenderLabel(msg.sender)
-      };
-      
-      setMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, newMessage];
-      });
-    };
-
-    const handleRaiseHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} поднял(а) руку`);
-      setRaisedHands(prev => new Set(prev).add(peerID));
-      
-      if (peerID !== socket.id) {
-        setNotifications(prev => [...prev.slice(-2), {
-          id: `hand-${peerID}-${Date.now()}`,
-          message: `${userName} поднял(а) руку`,
-          type: 'system',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-      }
-    };
-
-    const handleLowerHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} опустил(а) руку`);
-      setRaisedHands(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(peerID);
-        return newSet;
-      });
-      
-      if (peerID === socket.id) {
-        setIsHandRaised(false);
-      }
     };
 
     socket.on(ACTIONS.ADD_PEER, handleAddPeer);
     socket.on(ACTIONS.REMOVE_PEER, handleRemovePeer);
-    socket.on(ACTIONS.CHAT_MESSAGE, handleChatMessage);
-    socket.on(ACTIONS.RAISE_HAND, handleRaiseHand);
-    socket.on(ACTIONS.LOWER_HAND, handleLowerHand);
 
     return () => {
       socket.off(ACTIONS.ADD_PEER, handleAddPeer);
       socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
-      socket.off(ACTIONS.CHAT_MESSAGE, handleChatMessage);
-      socket.off(ACTIONS.RAISE_HAND, handleRaiseHand);
-      socket.off(ACTIONS.LOWER_HAND, handleLowerHand);
     };
-  }, [getSenderLabel]);
+  }, []);
 
+  // Подписка на события чата и запрос истории
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
@@ -932,14 +863,15 @@ const Room: React.FC = () => {
     };
   }, [roomID, addChatMessage]);
 
+  // Подписка на события уведомлений и списка участников
   useEffect(() => {
-    const handleUserJoined = ({
-      peerID,
-      userName: joinedUserName,
+    const handleUserJoined = ({ 
+      peerID, 
+      userName: joinedUserName, 
       timestamp,
-      participants
-    }: {
-      peerID: string;
+      participants 
+    }: { 
+      peerID: string; 
       userName: string;
       timestamp: string;
       participants?: Participant[];
@@ -958,13 +890,13 @@ const Room: React.FC = () => {
       }
     };
 
-    const handleUserLeft = ({
-      peerID,
-      userName: leftUserName,
+    const handleUserLeft = ({ 
+      peerID, 
+      userName: leftUserName, 
       timestamp,
-      participants
-    }: {
-      peerID: string;
+      participants 
+    }: { 
+      peerID: string; 
       userName: string;
       timestamp: string;
       participants?: Participant[];
@@ -989,7 +921,7 @@ const Room: React.FC = () => {
       console.log(`User ${peerID} updated name to ${updatedName}`);
       
       setUserNames(prev => ({ ...prev, [peerID]: updatedName }));
-      setAllParticipants(prev =>
+      setAllParticipants(prev => 
         prev.map(p => p.id === peerID ? { ...p, name: updatedName } : p)
       );
       
@@ -1003,25 +935,58 @@ const Room: React.FC = () => {
       }
     };
 
+    const handleRaiseHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
+      console.log(`${userName} поднял(а) руку`);
+      setRaisedHands(prev => new Set(prev).add(peerID));
+      
+      if (peerID !== socket.id) {
+        setNotifications(prev => [...prev.slice(-2), {
+          id: `hand-${peerID}-${Date.now()}`,
+          message: `${userName} поднял(а) руку`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+    };
+
+    const handleLowerHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
+      console.log(`${userName} опустил(а) руку`);
+      setRaisedHands(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(peerID);
+        return newSet;
+      });
+      
+      if (peerID === socket.id) {
+        setIsHandRaised(false);
+      }
+    };
+
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
     socket.on('participants-list', handleParticipantsList);
     socket.on('user-name-updated', handleUserNameUpdated);
+    socket.on(ACTIONS.RAISE_HAND, handleRaiseHand);
+    socket.on(ACTIONS.LOWER_HAND, handleLowerHand);
     
     return () => {
       socket.off('user-joined', handleUserJoined);
       socket.off('user-left', handleUserLeft);
       socket.off('participants-list', handleParticipantsList);
       socket.off('user-name-updated', handleUserNameUpdated);
+      socket.off(ACTIONS.RAISE_HAND, handleRaiseHand);
+      socket.off(ACTIONS.LOWER_HAND, handleLowerHand);
     };
   }, []);
 
+  // Запрашиваем список участников при загрузке
   useEffect(() => {
     if (roomID && devicesInitialized) {
       socket.emit('get-participants', { roomID });
     }
   }, [roomID, devicesInitialized]);
 
+  // Обработка и отображение ошибок WebRTC
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -1040,11 +1005,13 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
+  // Функция проверки доступности устройства
   const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
     if (!initialMediaState) return true;
     return initialMediaState[type];
   }, [initialMediaState]);
 
+  // Синхронизация треков
   useEffect(() => {
     if (devicesInitialized && forceSyncTracks) {
       const timer = setTimeout(() => {
@@ -1057,12 +1024,14 @@ const Room: React.FC = () => {
 
   return (
     <div className={styles.roomContainer}>
+      {/* Окно выбора устройств */}
       {showDeviceSelection && (
         <DeviceSelection onJoin={handleDeviceSelection} />
       )}
 
-      {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) ||
-       (clients.length === 0 && devicesInitialized) ||
+      {/* Оверлей с ошибками */}
+      {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) || 
+       (clients.length === 0 && devicesInitialized) || 
        !webRTCStatus.isSupported ? (
         <div className={styles.errorOverlay}>
           {!webRTCStatus.isSupported ? (
@@ -1093,14 +1062,15 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
+      {/* Видео потоки участников */}
       {videoLayouts.map(({ clientID, layout, isScreenShare }) => {
         const isLocal = clientID === LOCAL_VIDEO;
-        const hasMediaStream = isLocal ?
-          (mediaState.audio || mediaState.video || mediaState.screen) :
+        const hasMediaStream = isLocal ? 
+          (mediaState.audio || mediaState.video || mediaState.screen) : 
           (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getTracks().length > 0;
-
+        
         return (
-          <div
+          <div 
             key={clientID}
             data-client-id={clientID}
             className={`${styles.videoWrapper} ${
@@ -1121,16 +1091,8 @@ const Room: React.FC = () => {
                 clientID === LOCAL_VIDEO && !mediaState.video && !mediaState.screen ? styles.videoLocalHidden : ''
               } ${!participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''}`}
             />
-
-            {/* Красивый индикатор поднятой руки */}
-            {raisedHands.has(clientID) && (
-              <div className={styles.handRaisedBadge}>
-                <div className={styles.handIconWrapper}>
-                  <span className={styles.handIcon}>✋</span>
-                </div>
-              </div>
-            )}
-
+            
+            {/* Индикатор демонстрации экрана */}
             {isScreenShare && (
               <div className={styles.screenShareBadge}>
                 <span className={styles.screenShareIcon}>🖥️</span>
@@ -1139,24 +1101,36 @@ const Room: React.FC = () => {
                 </span>
               </div>
             )}
-
-            {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject ||
+            
+            {/* Красивый индикатор поднятой руки */}
+            {raisedHands.has(clientID) && (
+              <div className={styles.handRaisedBadge}>
+                <div className={styles.handIconWrapper}>
+                  <span className={styles.handIcon}>✋</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Плейсхолдер для участников без видео */}
+            {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject || 
               (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0)) && (
               <div className={styles.participantPlaceholder}>
                 <div className={styles.participantAvatar}>
-                  {getUserDisplayName(clientID).charAt(0)}
+                  {escapeHtml(getUserDisplayName(clientID).charAt(0))}
                 </div>
                 <div className={styles.participantName}>
-                  {getUserDisplayName(clientID)}
+                  {escapeHtml(getUserDisplayName(clientID))}
                 </div>
                 <div className={styles.participantStatus}>
                   📹 Нет видео
                 </div>
               </div>
             )}
-
+            
+            {/* Верхняя панель управления */}
             <div className={styles.videoTopControls}>
-              <button
+              {/* Кнопка полноэкранного режима */}
+              <button 
                 className={styles.fullscreenButton}
                 onClick={() => toggleFullscreen(clientID)}
                 title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
@@ -1164,6 +1138,7 @@ const Room: React.FC = () => {
                 {fullscreenParticipant === clientID ? '⤢' : '⤡'}
               </button>
 
+              {/* Кнопки управления для других участников */}
               {clientID !== LOCAL_VIDEO && (
                 <div className={styles.participantControls}>
                   <button
@@ -1188,13 +1163,16 @@ const Room: React.FC = () => {
               )}
             </div>
 
+            {/* Нижняя метка пользователя */}
             <div className={styles.userLabel}>
-              {getUserDisplayName(clientID)}
+              {escapeHtml(getUserDisplayName(clientID))}
               
+              {/* Индикаторы состояния медиа */}
               {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
               {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
               {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
               
+              {/* Индикаторы отключенного контента */}
               {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
                 <span className={styles.videoDisabledIndicator}>📹❌</span>
               )}
@@ -1206,8 +1184,9 @@ const Room: React.FC = () => {
         );
       })}
 
+      {/* Кнопка выхода из полноэкранного режима */}
       {fullscreenParticipant && (
-        <button
+        <button 
           className={styles.exitFullscreenButton}
           onClick={handleExitFullscreen}
           title="Выйти из полноэкранного режима"
@@ -1216,7 +1195,9 @@ const Room: React.FC = () => {
         </button>
       )}
 
+      {/* Панель управления */}
       <div className={styles.controls}>
+        {/* Кнопка микрофона */}
         <button
           onClick={() => toggleMedia('audio')}
           className={`${styles.controlButton} ${
@@ -1229,6 +1210,7 @@ const Room: React.FC = () => {
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
 
+        {/* Кнопка камеры */}
         <button
           onClick={() => toggleMedia('video')}
           className={`${styles.controlButton} ${
@@ -1241,18 +1223,7 @@ const Room: React.FC = () => {
           {mediaState.video ? '📹' : '📷'}
         </button>
 
-        {/* Кнопка поднятия руки */}
-        <button
-          onClick={toggleHandRaise}
-          className={`${styles.controlButton} ${
-            isHandRaised ? styles.controlButtonHandRaised : styles.controlButtonHand
-          }`}
-          title={isHandRaised ? "Опустить руку" : "Поднять руку"}
-          aria-label={isHandRaised ? "Опустить руку" : "Поднять руку"}
-        >
-          {isHandRaised ? '👇' : '✋'}
-        </button>
-
+        {/* Кнопка демонстрации экрана */}
         {!isMobile && (
           !mediaState.screen ? (
             <button
@@ -1275,6 +1246,19 @@ const Room: React.FC = () => {
           )
         )}
 
+        {/* Кнопка поднятия руки */}
+        <button
+          onClick={toggleHandRaise}
+          className={`${styles.controlButton} ${
+            isHandRaised ? styles.controlButtonHandRaised : styles.controlButtonHand
+          }`}
+          title={isHandRaised ? "Опустить руку" : "Поднять руку"}
+          aria-label={isHandRaised ? "Опустить руку" : "Поднять руку"}
+        >
+          {isHandRaised ? '👇' : '✋'}
+        </button>
+
+        {/* Кнопка списка участников */}
         <button
           onClick={() => setShowParticipants(!showParticipants)}
           className={`${styles.controlButton} ${
@@ -1286,6 +1270,7 @@ const Room: React.FC = () => {
           👥
         </button>
 
+        {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
           className={`${styles.controlButton} ${
@@ -1297,6 +1282,7 @@ const Room: React.FC = () => {
           💬
         </button>
 
+        {/* Кнопка настроек */}
         <button
           onClick={() => setShowSettings(!showSettings)}
           className={`${styles.controlButton} ${
@@ -1308,6 +1294,7 @@ const Room: React.FC = () => {
           ⚙️
         </button>
 
+        {/* Кнопка копирования ссылки */}
         <button
           onClick={handleCopyLink}
           className={`${styles.controlButton} ${styles.copyButton}`}
@@ -1318,6 +1305,7 @@ const Room: React.FC = () => {
           {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
         </button>
 
+        {/* Кнопка выхода */}
         <button
           onClick={handleLeaveRoom}
           className={`${styles.controlButton} ${styles.controlButtonLeave}`}
@@ -1328,6 +1316,7 @@ const Room: React.FC = () => {
         </button>
       </div>
 
+      {/* Панель списка участников */}
       {showParticipants && (
         <div className={styles.participantsPanel}>
           <div className={styles.participantsHeader}>
@@ -1340,32 +1329,32 @@ const Room: React.FC = () => {
               ×
             </button>
           </div>
-
+          
           <div className={styles.participantsList}>
             {participantsList.length === 0 ? (
               <div className={styles.noParticipants}>Нет участников</div>
             ) : (
               participantsList.map(participant => (
-                <div
-                  key={participant.id}
+                <div 
+                  key={participant.id} 
                   className={`${styles.participantItem} ${participant.isLocal ? styles.local : ''}`}
                 >
                   <div className={`${styles.participantAvatar} ${participant.isLocal ? styles.local : ''} ${
                     participant.isScreenSharing ? styles.screenSharing : ''
-                  } ${raisedHands.has(participant.id) ? styles.handRaised : ''}`}>
-                    {raisedHands.has(participant.id) && (
+                  } ${participant.isHandRaised ? styles.handRaised : ''}`}>
+                    {participant.isHandRaised && (
                       <div className={styles.avatarHandIcon}>✋</div>
                     )}
                     {participant.isScreenSharing && (
                       <div className={styles.avatarScreenIcon}>🖥️</div>
                     )}
                     <span className={styles.avatarInitial}>
-                      {participant.name.charAt(0)}
+                      {escapeHtml(participant.name.charAt(0))}
                     </span>
                   </div>
                   <div className={styles.participantInfo}>
                     <div className={styles.participantName}>
-                      {participant.name}
+                      {escapeHtml(participant.name)}
                       {participant.isLocal && ' (Вы)'}
                     </div>
                   </div>
@@ -1376,6 +1365,7 @@ const Room: React.FC = () => {
         </div>
       )}
 
+      {/* Чат */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
@@ -1397,12 +1387,16 @@ const Room: React.FC = () => {
                   key={msg.id}
                   className={`${styles.message} ${msg.isLocal ? styles.messageLocal : ''}`}
                 >
-                  <div className={styles.messageSender}>{getSenderLabel(msg.sender)}</div>
+                  <div className={styles.messageSender}>
+                    {escapeHtml(getSenderLabel(msg.sender))}
+                  </div>
                   <div
                     className={`${styles.messageBubble} ${
                       msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
                     }`}
-                    dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text) }}
+                    dangerouslySetInnerHTML={{ 
+                      __html: escapeHtml(msg.text).replace(/\n/g, '<br>') 
+                    }}
                   />
                   <div className={styles.messageTime}>
                     {msg.timestamp} {msg.isLocal ? '✓' : ''}
@@ -1412,6 +1406,7 @@ const Room: React.FC = () => {
             )}
           </div>
 
+          {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
             <button
               className={styles.attachmentButton}
@@ -1453,6 +1448,7 @@ const Room: React.FC = () => {
         </div>
       )}
 
+      {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>
@@ -1466,11 +1462,12 @@ const Room: React.FC = () => {
             </button>
           </div>
 
+          {/* Настройки имени */}
           <div className={styles.nameSettings}>
             <label className={styles.settingsLabel}>
               Ваше имя:
             </label>
-            <div className={styles.currentName}>{userName || 'Не указано'}</div>
+            <div className={styles.currentName}>{escapeHtml(userName || 'Не указано')}</div>
             <button
               onClick={() => setShowNameInput(true)}
               className={styles.changeNameButton}
@@ -1479,6 +1476,7 @@ const Room: React.FC = () => {
             </button>
           </div>
 
+          {/* Выбор микрофона */}
           {availableDevices.audio.length > 0 && (
             <div className={styles.settingsSection}>
               <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
@@ -1499,6 +1497,7 @@ const Room: React.FC = () => {
             </div>
           )}
 
+          {/* Выбор камеры */}
           {availableDevices.video.length > 0 && (
             <div className={styles.settingsSection}>
               <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
@@ -1521,6 +1520,7 @@ const Room: React.FC = () => {
         </div>
       )}
 
+      {/* Модальное окно изменения имени */}
       {showNameInput && (
         <div className={styles.nameInputOverlay}>
           <div className={styles.nameInputModal}>
@@ -1551,26 +1551,27 @@ const Room: React.FC = () => {
         </div>
       )}
 
+      {/* Контейнер для уведомлений */}
       <div className={styles.notificationsContainer}>
         {notifications.slice(-3).map((notification) => (
-          <div
+          <div 
             key={notification.id}
             className={`${styles.notification} ${styles[`notification${notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}`]}`}
             onAnimationEnd={() => {
               setTimeout(() => {
-                setNotifications(prev =>
+                setNotifications(prev => 
                   prev.filter(n => n.id !== notification.id)
                 );
               }, 3000);
             }}
           >
             <div className={styles.notificationIcon}>
-              {notification.type === 'join' ? '➕' :
+              {notification.type === 'join' ? '➕' : 
                notification.type === 'leave' ? '➖' : '💬'}
             </div>
             <div className={styles.notificationContent}>
               <div className={styles.notificationMessage}>
-                {notification.message}
+                {escapeHtml(notification.message)}
               </div>
               <div className={styles.notificationTime}>
                 {notification.timestamp}
