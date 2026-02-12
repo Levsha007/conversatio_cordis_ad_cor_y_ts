@@ -6,22 +6,22 @@ import { ACTIONS } from './actions';
  * Интерфейс для сообщения чата
  */
 interface ChatMessage {
-  id: string;          // Уникальный ID сообщения
-  sender: string;      // ID отправителя
-  message: string;     // Текст сообщения
-  timestamp: string;   // Временная метка
-  userNumber?: number; // Номер пользователя
-  userName?: string;   // Имя пользователя
+  id: string;
+  sender: string;
+  message: string;
+  timestamp: string;
+  userNumber?: number;
+  userName?: string;
 }
 
 /**
  * Интерфейс для прикреплённого файла в чате
  */
 interface FileAttachment {
-  id: string;          // Уникальный ID события
-  sender: string;      // ID отправителя
-  fileName: string;    // Имя файла
-  timestamp: string;   // Временная метка
+  id: string;
+  sender: string;
+  fileName: string;
+  timestamp: string;
 }
 
 /**
@@ -34,35 +34,35 @@ type CustomSocketOptions = Partial<ManagerOptions & SocketOptions> & {
 // Конфигурация подключения к серверу
 const options: CustomSocketOptions = {
   "force new connection": true,
-  reconnectionAttempts: Infinity, // Бесконечные попытки переподключения
-  timeout: 10000,                 // Таймаут подключения
-  transports: ["websocket"],      // Приоритет WebSocket
-  withCredentials: true           // Поддержка кросс-доменных запросов
+  reconnectionAttempts: Infinity,
+  timeout: 10000,
+  transports: ["websocket"],
+  withCredentials: true
 };
 
 /**
  * Интерфейс для информации об участнике
  */
 interface ParticipantInfo {
-  id: string;          // ID участника
-  name: string;        // Имя участника
-  isOnline: boolean;   // Онлайн статус
+  id: string;
+  name: string;
+  isOnline: boolean;
 }
 
 /**
  * Типы событий, которые может получать клиент от сервера
  */
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { 
-    peerID: string, 
-    createOffer: boolean, 
+  [ACTIONS.ADD_PEER]: (params: {
+    peerID: string,
+    createOffer: boolean,
     userNumber?: number,
-    userName?: string 
+    userName?: string
   }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
   [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
-  [ACTIONS.CHAT_MESSAGE]: (params: { 
+  [ACTIONS.CHAT_MESSAGE]: (params: {
     id: string;
     sender: string;
     message: string;
@@ -75,21 +75,20 @@ interface ServerToClientEvents {
   [ACTIONS.RAISE_HAND]: (params: { peerID: string; userName: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { peerID: string; userName: string }) => void;
   
-  // Новые события для уведомлений и списка участников
-  'user-joined': (params: { 
-    peerID: string; 
+  'user-joined': (params: {
+    peerID: string;
     userName: string;
     timestamp: string;
     participants?: ParticipantInfo[];
   }) => void;
-  'user-left': (params: { 
-    peerID: string; 
+  'user-left': (params: {
+    peerID: string;
     userName: string;
     timestamp: string;
     participants?: ParticipantInfo[];
   }) => void;
-  'user-name-updated': (params: { 
-    peerID: string; 
+  'user-name-updated': (params: {
+    peerID: string;
     userName: string;
   }) => void;
   'participants-list': (participants: ParticipantInfo[]) => void;
@@ -99,13 +98,13 @@ interface ServerToClientEvents {
  * Типы событий, которые может отправлять клиент серверу
  */
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { 
+  [ACTIONS.JOIN]: (params: {
     room: string;
     userName?: string;
   }) => void;
   [ACTIONS.RELAY_ICE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
   [ACTIONS.RELAY_SDP]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
-  [ACTIONS.CHAT_MESSAGE]: (params: { 
+  [ACTIONS.CHAT_MESSAGE]: (params: {
     roomID: string;
     message: string;
     id: string;
@@ -119,13 +118,12 @@ interface ClientToServerEvents {
     id?: string;
     timestamp?: string;
   }) => void;
+  [ACTIONS.LEAVE]: () => void;
   [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
-  [ACTIONS.LEAVE]: () => void;
   
-  // Новые события для обновления имени и получения списка участников
-  'update-user-name': (params: { 
-    roomID: string; 
+  'update-user-name': (params: {
+    roomID: string;
     userName: string;
   }) => void;
   'get-participants': (params: { roomID: string }) => void;
@@ -135,10 +133,10 @@ interface ClientToServerEvents {
  * Создание экземпляра сокета с полной типизацией
  */
 const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
-  "https://conversatio-cordis-ad-cor-y-ts.onrender.com",  
+  "https://conversatio-cordis-ad-cor-y-ts.onrender.com",
   {
     ...options,
-    transports: ["websocket", "polling"] // Используем оба транспорта
+    transports: ["websocket", "polling"]
   }
 );
 

@@ -41,16 +41,6 @@ export const ACTIONS = {
 export default ACTIONS;
 
 /**
- * Типы для работы с действиями
- */
-
-// Тип ключей действий (например 'JOIN' | 'LEAVE' | ...)
-export type ActionKeys = keyof typeof ACTIONS;
-
-// Тип значений действий (например 'join' | 'leave' | ...)
-export type ActionValues = typeof ACTIONS[ActionKeys];
-
-/**
  * Утилиты для очистки и валидации данных
  */
 export const sanitizeInput = (input: string): string => {
@@ -61,7 +51,7 @@ export const sanitizeInput = (input: string): string => {
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;')
     .trim()
-    .substring(0, 1000); // Ограничение длины
+    .substring(0, 1000);
 };
 
 export const sanitizeUserName = (name: string): string => {
@@ -78,43 +68,52 @@ export const validateRoomID = (roomID: string): boolean => {
 };
 
 /**
+ * Типы для работы с действиями
+ */
+
+// Тип ключей действий (например 'JOIN' | 'LEAVE' | ...)
+export type ActionKeys = keyof typeof ACTIONS;
+
+// Тип значений действий (например 'join' | 'leave' | ...)
+export type ActionValues = typeof ACTIONS[ActionKeys];
+
+/**
  * Типы для конкретных событий
  */
 
 // Действие подключения к комнате
 export type JoinAction = {
   type: typeof ACTIONS.JOIN;
-  room: string; // ID комнаты
-  userId?: string; // Опциональный ID пользователя
-  userName?: string; // Опциональное имя пользователя
-  hasMedia?: boolean; // Флаг наличия медиаустройств
+  room: string;
+  userId?: string;
+  userName?: string;
+  hasMedia?: boolean;
 };
 
 // Действие передачи ICE кандидата
 export type IceCandidateAction = {
   type: typeof ACTIONS.ICE_CANDIDATE;
-  peerID: string; // ID участника
-  iceCandidate: RTCIceCandidate; // Данные ICE кандидата
+  peerID: string;
+  iceCandidate: RTCIceCandidate;
 };
 
 // Событие прикрепления файла
 export type FileAttachedAction = {
   type: typeof ACTIONS.FILE_ATTACHED;
-  roomID: string; // ID комнаты
-  fileName: string; // Имя файла
-  sender: string; // Отправитель
-  timestamp: string; // Временная метка
+  roomID: string;
+  fileName: string;
+  sender: string;
+  timestamp: string;
 };
 
 /**
  * Объединённый тип всех возможных действий
- * Можно расширять добавлением новых типов действий
  */
 export type SocketAction =
   | JoinAction
   | IceCandidateAction
   | FileAttachedAction
-  | { type: typeof ACTIONS.LEAVE }; // Действие выхода из комнаты
+  | { type: typeof ACTIONS.LEAVE };
 
 /**
  * Тип для обработчиков действий
@@ -128,27 +127,27 @@ export type ActionHandler<T extends SocketAction> = (action: T) => void;
 
 // Сообщение чата
 interface ChatMessage {
-  id: string; // Уникальный ID сообщения
-  sender: string; // ID отправителя
-  message: string; // Текст сообщения
-  timestamp: string; // Временная метка
-  userNumber?: number; // Номер пользователя
-  userName?: string; // Имя пользователя
+  id: string;
+  sender: string;
+  message: string;
+  timestamp: string;
+  userNumber?: number;
+  userName?: string;
 }
 
 // Сообщение о прикреплённом файле
 interface FileAttachment {
-  id: string; // Уникальный ID
-  sender: string; // ID отправителя
-  fileName: string; // Имя файла
-  timestamp: string; // Временная метка
+  id: string;
+  sender: string;
+  fileName: string;
+  timestamp: string;
 }
 
 // События от сервера к клиенту
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { 
-    peerID: string; 
-    createOffer: boolean; 
+  [ACTIONS.ADD_PEER]: (params: {
+    peerID: string;
+    createOffer: boolean;
     userNumber?: number;
     userName?: string;
     hasMedia?: boolean;
@@ -166,7 +165,7 @@ interface ServerToClientEvents {
 
 // События от клиента к серверу
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { 
+  [ACTIONS.JOIN]: (params: {
     room: string;
     userName?: string;
     hasMedia?: boolean;
@@ -187,9 +186,9 @@ interface ClientToServerEvents {
     id?: string;
     timestamp?: string;
   }) => void;
+  [ACTIONS.LEAVE]: () => void;
   [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
-  [ACTIONS.LEAVE]: () => void;
   'update-user-name': (params: { roomID: string; userName: string }) => void;
 }
 
