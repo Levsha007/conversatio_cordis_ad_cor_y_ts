@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "mediasoup": "^3.19.3",
+    "mediasoup-client": "^3.18.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.1",
+    "socket.io": "^4.8.3",
     "socket.io-client": "^4.5.4",
     "uuid": "^9.0.0"
   },

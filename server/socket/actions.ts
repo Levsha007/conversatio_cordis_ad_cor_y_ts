@@ -7,37 +7,22 @@ export const ACTIONS = {
   JOIN: 'join',
   // Выход из комнаты
   LEAVE: 'leave',
-  // Обмен списком доступных комнат
-  SHARE_ROOMS: 'share-rooms',
-  // Запрос списка комнат
-  GET_ROOMS: 'get-rooms',
   // Добавление нового участника
   ADD_PEER: 'add-peer',
   // Удаление участника
   REMOVE_PEER: 'remove-peer',
-  // Передача SDP (Session Description Protocol) данных
-  RELAY_SDP: 'relay-sdp',
-  // Передача ICE (Interactive Connectivity Establishment) кандидатов
-  RELAY_ICE: 'relay-ice',
-  // ICE кандидат для установки P2P соединения
-  ICE_CANDIDATE: 'ice-candidate',
-  // Описание сессии WebRTC
-  SESSION_DESCRIPTION: 'session-description',
   // Сообщение в чате
   CHAT_MESSAGE: 'chat-message',
   // История чата
   CHAT_HISTORY: 'chat-history',
   // Запрос истории чата
   REQUEST_CHAT_HISTORY: 'request-chat-history',
-  // Прикрепление файла в чате
-  FILE_ATTACHED: 'file-attached',
   // Поднятие руки
   RAISE_HAND: 'raise-hand',
   // Опускание руки
   LOWER_HAND: 'lower-hand'
 } as const;
 
-// Экспорт по умолчанию для обратной совместимости
 export default ACTIONS;
 
 /**
@@ -57,7 +42,7 @@ export const sanitizeInput = (input: string): string => {
 };
 
 export const sanitizeUserName = (name: string): string => {
-  if (!name) return 'Участник';
+  if (!name) return '';
   const sanitized = sanitizeInput(name);
   return sanitized || 'Участник';
 };
@@ -71,112 +56,51 @@ export const validateRoomID = (roomID: string): boolean => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roomID);
 };
 
-/**
- * Типы для работы с действиями
- */
-
-// Тип ключей действий (например 'JOIN' | 'LEAVE' | ...)
 export type ActionKeys = keyof typeof ACTIONS;
-
-// Тип значений действий (например 'join' | 'leave' | ...)
 export type ActionValues = typeof ACTIONS[ActionKeys];
 
-/**
- * Типы для конкретных событий
- */
-
-// Действие подключения к комнате
-export type JoinAction = {
-  type: typeof ACTIONS.JOIN;
-  room: string; // ID комнаты
-  userId?: string; // Опциональный ID пользователя
-  userName?: string; // Опциональное имя пользователя
-  hasMedia?: boolean; // Флаг наличия медиаустройств
-};
-
-// Действие передачи ICE кандидата
-export type IceCandidateAction = {
-  type: typeof ACTIONS.ICE_CANDIDATE;
-  peerID: string; // ID участника
-  iceCandidate: RTCIceCandidate; // Данные ICE кандидата
-};
-
-// Событие прикрепления файла
-export type FileAttachedAction = {
-  type: typeof ACTIONS.FILE_ATTACHED;
-  roomID: string; // ID комнаты
-  fileName: string; // Имя файла
-  sender: string; // Отправитель
-  timestamp: string; // Временная метка
-};
-
-/**
- * Объединённый тип всех возможных действий
- * Можно расширять добавлением новых типов действий
- */
-export type SocketAction =
-  | JoinAction
-  | IceCandidateAction
-  | FileAttachedAction
-  | { type: typeof ACTIONS.LEAVE };
-
-/**
- * Тип для обработчиков действий
- * @template T - конкретный тип действия
- */
-export type ActionHandler<T extends SocketAction> = (action: T) => void;
-
-// --------------------------
-// Типы для Socket.IO (Server-to-client / Client-to-server)
-// --------------------------
-
-// Сообщение чата
-interface ChatMessage {
-  id: string; // Уникальный ID сообщения
-  sender: string; // ID отправителя
-  message: string; // Текст сообщения
-  timestamp: string; // Временная метка
-  userNumber?: number; // Номер пользователя
-  userName?: string; // Имя пользователя
-}
-
-// Сообщение о прикреплённом файле
-interface FileAttachment {
-  id: string; // Уникальный ID
-  sender: string; // ID отправителя
-  fileName: string; // Имя файла
-  timestamp: string; // Временная метка
-}
-
 // События от сервера к клиенту
-interface ServerToClientEvents {
+export interface ServerToClientEvents {
   [ACTIONS.ADD_PEER]: (params: { 
     peerID: string; 
     createOffer: boolean; 
-    userNumber?: number;
     userName?: string;
     hasMedia?: boolean;
   }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
-  [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string; iceCandidate: RTCIceCandidateInit }) => void;
-  [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string; sessionDescription: RTCSessionDescriptionInit }) => void;
-  [ACTIONS.CHAT_MESSAGE]: (params: ChatMessage) => void;
-  [ACTIONS.CHAT_HISTORY]: (messages: ChatMessage[]) => void;
-  [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  [ACTIONS.CHAT_MESSAGE]: (params: {
+    id: string;
+    sender: string;
+    message: string;
+    timestamp: string;
+    userName?: string;
+  }) => void;
+  [ACTIONS.CHAT_HISTORY]: (messages: any[]) => void;
   [ACTIONS.RAISE_HAND]: (params: { peerID: string; userName: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { peerID: string; userName: string }) => void;
+  
+  'transport-created': (params: {
+    id: string;
+    iceParameters: any;
+    iceCandidates: any[];
+    dtlsParameters: any;
+  }) => void;
+  'existing-peers': (peers: Array<{ peerId: string; userName: string; hasMedia: boolean }>) => void;
+  'new-producer': (params: {
+    peerId: string;
+    peerName: string;
+    kind: 'audio' | 'video';
+    consumerParameters: any;
+  }) => void;
+  'producer-created': (params: { kind: 'audio' | 'video'; producerId: string }) => void;
+  'active-speaker': (params: { peerId: string }) => void;
   'user-name-updated': (params: { peerID: string; userName: string }) => void;
+  'error': (params: { message: string }) => void;
 }
 
 // События от клиента к серверу
-interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { 
-    room: string;
-    userName?: string;
-    hasMedia?: boolean;
-  }) => void;
-  [ACTIONS.RELAY_ICE]: (params: { peerID: string; iceCandidate: RTCIceCandidateInit }) => void;
-  [ACTIONS.RELAY_SDP]: (params: { peerID: string; sessionDescription: RTCSessionDescriptionInit }) => void;
+export interface ClientToServerEvents {
+  [ACTIONS.JOIN]: (params: { room: string; userName?: string; hasMedia?: boolean }) => void;
   [ACTIONS.CHAT_MESSAGE]: (params: {
     roomID: string;
     message: string;
@@ -185,22 +109,12 @@ interface ClientToServerEvents {
     userName?: string;
   }) => void;
   [ACTIONS.REQUEST_CHAT_HISTORY]: (params: { roomID: string }) => void;
-  [ACTIONS.FILE_ATTACHED]: (params: {
-    roomID: string;
-    fileName: string;
-    id?: string;
-    timestamp?: string;
-  }) => void;
   [ACTIONS.LEAVE]: () => void;
   [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
+  
+  'create-producer': (params: { kind: 'audio' | 'video'; rtpParameters: any }) => void;
+  'resume-consumer': (params: { peerId: string; kind: 'audio' | 'video' }) => void;
+  'audio-level': (params: { level: number }) => void;
   'update-user-name': (params: { roomID: string; userName: string }) => void;
 }
-
-// Экспортируем интерфейсы для использования в других частях приложения
-export type {
-  ChatMessage,
-  FileAttachment,
-  ServerToClientEvents,
-  ClientToServerEvents
-};

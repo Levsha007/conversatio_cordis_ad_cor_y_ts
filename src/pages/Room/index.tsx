@@ -5,17 +5,11 @@ import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
-/**
- * Интерфейс для описания параметров расположения видео элементов
- */
 interface LayoutItem {
   width: string;
   height: string;
 }
 
-/**
- * Интерфейс для сообщений чата
- */
 interface ChatMessage {
   id: string;
   text: string;
@@ -25,26 +19,17 @@ interface ChatMessage {
   userName?: string;
 }
 
-/**
- * Интерфейс для настроек устройств
- */
 interface DeviceSettings {
   audio: boolean;
   video: boolean;
 }
 
-/**
- * Интерфейс для участника
- */
 interface Participant {
   id: string;
   name: string;
   isOnline: boolean;
 }
 
-/**
- * Кастомный хук для определения мобильного устройства
- */
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -56,42 +41,8 @@ const useIsMobile = (): boolean => {
   return isMobile;
 };
 
-/**
- * Кастомный хук для синхронизации вкладок
- */
-const useTabSync = (roomId: string) => {
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!roomId) return;
-
-    const tabId = sessionStorage.getItem(`vc_tab_${roomId}`) || Date.now().toString();
-    sessionStorage.setItem(`vc_tab_${roomId}`, tabId);
-
-    const channel = new BroadcastChannel(`vc_${roomId}`);
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data.type === 'TAB_ACTIVE' && e.data.tabId !== tabId) {
-        socket.emit(ACTIONS.LEAVE);
-        navigate('/', { replace: true });
-      }
-    };
-    channel.addEventListener('message', handleMessage);
-
-    channel.postMessage({ type: 'TAB_ACTIVE', tabId });
-
-    return () => {
-      channel.removeEventListener('message', handleMessage);
-      channel.close();
-      sessionStorage.removeItem(`vc_tab_${roomId}`);
-    };
-  }, [roomId, navigate]);
-};
-
-/**
- * Функция экранирования HTML для безопасного отображения пользовательского ввода
- */
 const escapeHtml = (text: string): string => {
   if (!text) return '';
-  
   const map: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
@@ -99,13 +50,9 @@ const escapeHtml = (text: string): string => {
     '"': '&quot;',
     "'": '&#039;'
   };
-  
   return text.replace(/[&<>"']/g, (char) => map[char]);
 };
 
-/**
- * Компонент выбора устройств перед входом в комнату
- */
 const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
@@ -131,12 +78,6 @@ const DeviceSelection: React.FC<{
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка перед входом</h2>
         
-        <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(179, 0, 0, 0.1)', borderRadius: '8px' }}>
-          <p style={{ color: '#ffffff', fontWeight: 'bold' }}>
-            ⚠️ Для изменения выбора устройств потребуется перезагрузка страницы
-          </p>
-        </div>
-        
         <div className={styles.nameInputSection}>
           <label className={styles.nameLabel}>Ваше имя (необязательно):</label>
           <input
@@ -147,9 +88,6 @@ const DeviceSelection: React.FC<{
             className={styles.nameInput}
             maxLength={50}
           />
-          <div className={styles.nameHint}>
-            Если не указать имя, будет сгенерировано автоматически
-          </div>
         </div>
 
         <p>Выберите устройства для использования:</p>
@@ -159,9 +97,6 @@ const DeviceSelection: React.FC<{
             <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>🎤</span>
               <span className={styles.deviceName}>Микрофон</span>
-              <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.audio ? 'Будет использоваться' : 'Не будет использоваться'}
-              </span>
             </div>
             <button
               className={`${styles.toggleButton} ${initialSettings.audio ? styles.toggleOn : styles.toggleOff}`}
@@ -176,9 +111,6 @@ const DeviceSelection: React.FC<{
             <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>📹</span>
               <span className={styles.deviceName}>Камера</span>
-              <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.video ? 'Будет использоваться' : 'Не будет использоваться'}
-              </span>
             </div>
             <button
               className={`${styles.toggleButton} ${initialSettings.video ? styles.toggleOn : styles.toggleOff}`}
@@ -191,10 +123,7 @@ const DeviceSelection: React.FC<{
         </div>
 
         <div className={styles.deviceSelectionButtons}>
-          <button
-            onClick={handleJoin}
-            className={styles.joinButton}
-          >
+          <button onClick={handleJoin} className={styles.joinButton}>
             Войти в комнату
           </button>
         </div>
@@ -203,21 +132,7 @@ const DeviceSelection: React.FC<{
   );
 };
 
-/**
- * Функция расчета расположения видео элементов (обычный режим)
- */
-function calculateLayout(
-  clientsCount: number = 1, 
-  isMobile: boolean, 
-  fullscreenParticipant: string | null = null
-): LayoutItem[] {
-  if (fullscreenParticipant) {
-    return Array(clientsCount).fill({
-      width: '100%',
-      height: '100%'
-    });
-  }
-
+function calculateLayout(clientsCount: number = 1, isMobile: boolean): LayoutItem[] {
   if (isMobile) {
     if (clientsCount === 1) {
       return [{ width: '100%', height: '100%' }];
@@ -226,124 +141,27 @@ function calculateLayout(
         { width: '100%', height: '50%' },
         { width: '100%', height: '50%' }
       ];
-    } else if (clientsCount === 3) {
-      return [
-        { width: '100%', height: '50%' },
-        { width: '50%', height: '50%' },
-        { width: '50%', height: '50%' }
-      ];
     } else {
-      return Array(clientsCount).fill({
-        width: clientsCount <= 2 ? '100%' : '50%',
-        height: `${100 / Math.ceil(clientsCount / 2)}%`
-      });
+      const cols = Math.ceil(Math.sqrt(clientsCount));
+      const rows = Math.ceil(clientsCount / cols);
+      const width = `${100 / cols}%`;
+      const height = `${100 / rows}%`;
+      return Array(clientsCount).fill({ width, height });
     }
   }
 
-  const pairs = Array.from({ length: clientsCount }).reduce<Array<Array<undefined>>>(
-    (acc, _, index, arr) => {
-      if (index % 2 === 0) acc.push(arr.slice(index, index + 2) as undefined[]);
-      return acc;
-    },
-    []
-  );
-
-  return pairs.map((row, index, arr) => {
-    const height = `${100 / pairs.length}%`;
-    if (index === arr.length - 1 && row.length === 1) {
-      return [{ width: '100%', height }];
-    }
-    return row.map(() => ({ width: '50%', height }));
-  }).flat();
+  const cols = Math.ceil(Math.sqrt(clientsCount));
+  const rows = Math.ceil(clientsCount / cols);
+  const width = `${100 / cols}%`;
+  const height = `${100 / rows}%`;
+  return Array(clientsCount).fill({ width, height });
 }
 
-/**
- * Функция расчета расположения с поддержкой демонстрации экрана
- */
-function calculateLayoutWithScreenShare(
-  clients: string[],
-  isMobile: boolean,
-  screenShareParticipant: string | null,
-  fullscreenParticipant: string | null = null
-): { clientID: string; layout: LayoutItem; isScreenShare: boolean }[] {
-  if (fullscreenParticipant) {
-    return clients.map(client => ({
-      clientID: client,
-      layout: { width: '100%', height: '100%' },
-      isScreenShare: client === screenShareParticipant
-    }));
-  }
-
-  const screenShareClient = screenShareParticipant && clients.includes(screenShareParticipant) 
-    ? screenShareParticipant 
-    : null;
-  
-  if (screenShareClient) {
-    const otherClients = clients.filter(client => client !== screenShareClient);
-    
-    if (isMobile) {
-      return clients.map(client => {
-        if (client === screenShareClient) {
-          return {
-            clientID: client,
-            layout: { width: '100%', height: '70%' },
-            isScreenShare: true
-          };
-        } else {
-          const index = otherClients.indexOf(client);
-          const totalOthers = otherClients.length;
-          return {
-            clientID: client,
-            layout: { 
-              width: `${100 / Math.min(totalOthers, 3)}%`, 
-              height: '30%' 
-            },
-            isScreenShare: false
-          };
-        }
-      });
-    } else {
-      return clients.map(client => {
-        if (client === screenShareClient) {
-          return {
-            clientID: client,
-            layout: { width: '70%', height: '100%' },
-            isScreenShare: true
-          };
-        } else {
-          const index = otherClients.indexOf(client);
-          const totalOthers = otherClients.length;
-          return {
-            clientID: client,
-            layout: { 
-              width: '30%', 
-              height: `${100 / Math.min(totalOthers, 4)}%` 
-            },
-            isScreenShare: false
-          };
-        }
-      });
-    }
-  }
-  
-  const layout = calculateLayout(clients.length, isMobile, fullscreenParticipant);
-  return clients.map((client, index) => ({
-    clientID: client,
-    layout: layout[index],
-    isScreenShare: false
-  }));
-}
-
-/**
- * Основной компонент комнаты видеоконференции
- */
 const Room: React.FC = () => {
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
-  useTabSync(roomID || '');
   const isMobile = useIsMobile();
 
-  // Использование кастомного хука WebRTC
   const {
     clients,
     provideMediaRef,
@@ -361,7 +179,6 @@ const Room: React.FC = () => {
     startScreenShare,
     stopScreenShare,
     initializeMedia,
-    forceSyncTracks,
     refreshDevices,
     isDeviceAvailable,
     participantSettings,
@@ -369,7 +186,6 @@ const Room: React.FC = () => {
     toggleParticipantAudio
   } = useWebRTC(roomID || '');
 
-  // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
   const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
@@ -382,7 +198,6 @@ const Room: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const copyTimeout = useRef<number | null>(null);
-  const [userNumbers, setUserNumbers] = useState<Record<string, number>>({});
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userName, setUserName] = useState('');
@@ -396,75 +211,38 @@ const Room: React.FC = () => {
   const [showParticipants, setShowParticipants] = useState(false);
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [initialMediaState, setInitialMediaState] = useState<DeviceSettings | null>(null);
-  
-  // Состояния для поднятия руки
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
 
-  // Определяем, кто ведет демонстрацию экрана
-  const screenShareParticipant = useMemo(() => {
-    if (mediaState.screen) {
-      return LOCAL_VIDEO;
-    }
-    
-    for (const clientID of clients) {
-      if (clientID !== LOCAL_VIDEO) {
-        const stream = peerMediaElements.current[clientID]?.srcObject as MediaStream;
-        if (stream && stream.getVideoTracks().some(track => 
-          track.label.toLowerCase().includes('screen') || 
-          track.label.toLowerCase().includes('desktop') ||
-          track.label.toLowerCase().includes('window')
-        )) {
-          return clientID;
-        }
-      }
-    }
-    
-    return null;
-  }, [clients, mediaState.screen, peerMediaElements]);
+  const videoLayouts = useMemo(() => {
+    const layout = calculateLayout(clients.length, isMobile);
+    return clients.map((client, index) => ({
+      clientID: client,
+      layout: layout[index],
+      isScreenShare: false
+    }));
+  }, [clients, isMobile]);
 
-  // Используем новый расчет лейаута с поддержкой демонстрации экрана
-  const videoLayouts = useMemo(() => 
-    calculateLayoutWithScreenShare(
-      clients, 
-      isMobile, 
-      screenShareParticipant,
-      fullscreenParticipant
-    ),
-    [clients, isMobile, screenShareParticipant, fullscreenParticipant]
-  );
-
-  // Обновляем список участников
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => ({
       id: participant.id,
       name: participant.name,
       isOnline: participant.isOnline,
       isLocal: participant.id === socket.id,
-      isScreenSharing: participant.id === screenShareParticipant,
       isHandRaised: raisedHands.has(participant.id)
     }));
-  }, [allParticipants, screenShareParticipant, raisedHands]);
+  }, [allParticipants, raisedHands]);
 
-  /**
-   * Получение отображаемого имени пользователя
-   */
   const getUserDisplayName = useCallback((userId: string): string => {
     if (userId === LOCAL_VIDEO) return userName || 'Вы';
-    return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
-  }, [userName, userNumbers, userNames]);
+    return userNames[userId] || `Участник`;
+  }, [userName, userNames]);
 
-  /**
-   * Получение метки отправителя сообщения
-   */
   const getSenderLabel = useCallback((senderId: string): string => {
     if (senderId === socket.id) return userName || 'Вы';
-    return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
-  }, [userName, userNumbers, userNames]);
+    return userNames[senderId] || `Участник`;
+  }, [userName, userNames]);
 
-  /**
-   * Обработчик отправки сообщения
-   */
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
     
@@ -509,9 +287,6 @@ const Room: React.FC = () => {
     }
   }, [handleSendMessage]);
 
-  /**
-   * Обработчик поднятия/опускания руки
-   */
   const toggleHandRaise = useCallback(() => {
     if (!roomID) return;
     
@@ -520,9 +295,7 @@ const Room: React.FC = () => {
       setIsHandRaised(false);
       setRaisedHands(prev => {
         const newSet = new Set(prev);
-        if (socket.id) {
-          newSet.delete(socket.id);
-        }
+        if (socket.id) newSet.delete(socket.id);
         return newSet;
       });
     } else {
@@ -530,17 +303,12 @@ const Room: React.FC = () => {
       setIsHandRaised(true);
       setRaisedHands(prev => {
         const newSet = new Set(prev);
-        if (socket.id) {
-          newSet.add(socket.id);
-        }
+        if (socket.id) newSet.add(socket.id);
         return newSet;
       });
     }
   }, [roomID, isHandRaised]);
 
-  /**
-   * Обработчик выбора устройств
-   */
   const handleDeviceSelection = async (settings: DeviceSettings, name: string) => {
     setShowDeviceSelection(false);
     setUserName(name);
@@ -550,9 +318,6 @@ const Room: React.FC = () => {
     setDevicesInitialized(true);
   };
 
-  /**
-   * Переключение полноэкранного режима для участника
-   */
   const toggleFullscreen = useCallback((clientID: string) => {
     if (fullscreenParticipant === clientID) {
       setFullscreenParticipant(null);
@@ -561,19 +326,13 @@ const Room: React.FC = () => {
       }
     } else {
       setFullscreenParticipant(clientID);
-      
       const videoWrapper = document.querySelector(`[data-client-id="${clientID}"]`) as HTMLElement;
       if (videoWrapper && videoWrapper.requestFullscreen) {
-        videoWrapper.requestFullscreen().catch(err => {
-          console.error('Ошибка при входе в полноэкранный режим:', err);
-        });
+        videoWrapper.requestFullscreen().catch(console.error);
       }
     }
   }, [fullscreenParticipant]);
 
-  /**
-   * Обработчик выхода из полноэкранного режима
-   */
   const handleExitFullscreen = useCallback(() => {
     setFullscreenParticipant(null);
     if (document.fullscreenElement) {
@@ -581,9 +340,6 @@ const Room: React.FC = () => {
     }
   }, []);
 
-  /**
-   * Копирование ссылки на комнату в буфер обмена
-   */
   const handleCopyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -595,9 +351,6 @@ const Room: React.FC = () => {
     }
   }, []);
 
-  /**
-   * Выход из комнаты с подтверждением
-   */
   const handleLeaveRoom = useCallback(() => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       if (isHandRaised && roomID) {
@@ -607,88 +360,35 @@ const Room: React.FC = () => {
     }
   }, [navigate, isHandRaised, roomID]);
 
-  /**
-   * Повторная попытка подключения
-   */
   const handleRetry = useCallback(async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   }, [reconnect]);
 
-  /**
-   * Запуск демонстрации экрана
-   */
-  const handleStartScreenShare = useCallback(async () => {
-    try {
-      await startScreenShare();
-    } catch (err) {
-      console.error('Ошибка демонстрации экрана:', err);
-      if (err instanceof Error) {
-        if (err.name === 'NotAllowedError') {
-          alert('Разрешение на демонстрацию экрана было отклонено');
-        } else {
-          alert('Не удалось начать демонстрацию экрана: ' + err.message);
-        }
-      } else {
-        alert('Не удалось начать демонстрацию экрана');
-      }
-    }
-  }, [startScreenShare]);
-
-  /**
-   * Остановка демонстрации экрана
-   */
-  const handleStopScreenShare = useCallback(() => {
-    stopScreenShare();
-  }, [stopScreenShare]);
-
-  /**
-   * Обработчик демонстрации экрана
-   */
   const handleScreenShare = useCallback(async () => {
     if (mediaState.screen) {
-      handleStopScreenShare();
+      stopScreenShare();
     } else {
-      if (isHandRaised && roomID) {
-        toggleHandRaise();
-      }
+      if (isHandRaised && roomID) toggleHandRaise();
       try {
-        await handleStartScreenShare();
+        await startScreenShare();
       } catch (err) {
         console.error('Ошибка демонстрации экрана:', err);
       }
     }
-  }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare, isHandRaised, roomID, toggleHandRaise]);
+  }, [mediaState.screen, startScreenShare, stopScreenShare, isHandRaised, roomID, toggleHandRaise]);
 
-  /**
-   * Обработчик сохранения имени
-   */
   const handleSaveName = useCallback(() => {
     if (userName.trim()) {
       const newName = userName.trim();
       setUserName(newName);
-      
-      socket.emit('update-user-name', {
-        roomID: roomID || '',
-        userName: newName
-      });
-      
+      socket.emit('update-user-name', { roomID: roomID || '', userName: newName });
       setUserNames(prev => ({ ...prev, [socket.id as string]: newName }));
       setShowNameInput(false);
-      
-      setNotifications(prev => [...prev, {
-        id: `name-updated-${Date.now()}`,
-        message: `Имя изменено на "${newName}"`,
-        type: 'system',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
     }
   }, [userName, roomID]);
 
-  /**
-   * Обработчик выбора файла
-   */
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && roomID) {
@@ -703,9 +403,7 @@ const Room: React.FC = () => {
         userName: userName
       };
       
-      if (addChatMessage) {
-        addChatMessage(newMessage);
-      }
+      if (addChatMessage) addChatMessage(newMessage);
       setMessages(prev => [...prev, newMessage]);
 
       socket.emit(ACTIONS.CHAT_MESSAGE, {
@@ -716,101 +414,41 @@ const Room: React.FC = () => {
         userName: userName
       });
     }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [roomID, addChatMessage, userName]);
 
-  // Инициализация сообщений при монтировании
   useEffect(() => {
-    if (getChatMessages) {
-      setMessages(getChatMessages());
-    }
+    if (getChatMessages) setMessages(getChatMessages());
   }, [getChatMessages]);
 
-  // Автопрокрутка чата
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Обработчик события выхода из полноэкранного режима
   useEffect(() => {
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setFullscreenParticipant(null);
-      }
+      if (!document.fullscreenElement) setFullscreenParticipant(null);
     };
-
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Подписка на события Socket.IO для обновления номеров пользователей
-  useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer, userNumber, userName: peerUserName }: { 
-      peerID: string; 
-      createOffer: boolean;
-      userNumber?: number;
-      userName?: string;
-    }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', peerUserName);
-      
-      if (userNumber) {
-        setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
-      }
-      if (peerUserName) {
-        setUserNames(prev => ({ ...prev, [peerID]: peerUserName }));
-      }
-    };
-
-    const handleRemovePeer = ({ peerID }: { peerID: string }) => {
-      setUserNumbers(prev => {
-        const newNumbers = { ...prev };
-        delete newNumbers[peerID];
-        return newNumbers;
-      });
-      setUserNames(prev => {
-        const newNames = { ...prev };
-        delete newNames[peerID];
-        return newNames;
-      });
-    };
-
-    socket.on(ACTIONS.ADD_PEER, handleAddPeer);
-    socket.on(ACTIONS.REMOVE_PEER, handleRemovePeer);
-
-    return () => {
-      socket.off(ACTIONS.ADD_PEER, handleAddPeer);
-      socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
-    };
-  }, []);
-
-  // Подписка на события чата и запрос истории
+  // Подписка на события чата
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
       message: string;
       sender: string;
       timestamp: string;
-      userNumber?: number;
       userName?: string;
     }) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        
-        if (msg.userNumber && msg.sender !== socket.id) {
-          setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber! }));
-        }
         if (msg.userName && msg.sender !== socket.id) {
           setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName! }));
         }
-        
         const newMessage = {
           id: msg.id,
           text: msg.message,
@@ -819,11 +457,7 @@ const Room: React.FC = () => {
           sender: msg.sender,
           userName: msg.userName
         };
-        
-        if (addChatMessage) {
-          addChatMessage(newMessage);
-        }
-        
+        if (addChatMessage) addChatMessage(newMessage);
         return [...prev, newMessage];
       });
     };
@@ -837,13 +471,8 @@ const Room: React.FC = () => {
         sender: msg.sender,
         userName: msg.userName
       }));
-      
       setMessages(formattedMessages);
-      
       historyMessages.forEach(msg => {
-        if (msg.userNumber && msg.sender !== socket.id) {
-          setUserNumbers(prev => ({ ...prev, [msg.sender]: msg.userNumber }));
-        }
         if (msg.userName && msg.sender !== socket.id) {
           setUserNames(prev => ({ ...prev, [msg.sender]: msg.userName }));
         }
@@ -853,9 +482,7 @@ const Room: React.FC = () => {
     socket.on(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
     socket.on(ACTIONS.CHAT_HISTORY, chatHistoryHandler);
     
-    if (roomID) {
-      socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
-    }
+    if (roomID) socket.emit(ACTIONS.REQUEST_CHAT_HISTORY, { roomID });
 
     return () => {
       socket.off(ACTIONS.CHAT_MESSAGE, chatMessageHandler);
@@ -863,130 +490,101 @@ const Room: React.FC = () => {
     };
   }, [roomID, addChatMessage]);
 
-  // Подписка на события уведомлений и списка участников
+  // Подписка на события участников - ИСПОЛЬЗУЕМ any ДЛЯ ОБХОДА ТИПИЗАЦИИ
   useEffect(() => {
-    const handleUserJoined = ({ 
-      peerID, 
-      userName: joinedUserName, 
-      timestamp,
-      participants 
-    }: { 
-      peerID: string; 
-      userName: string;
-      timestamp: string;
-      participants?: Participant[];
-    }) => {
+    // Обработчик подключения участника
+    const handleUserJoined = (data: any) => {
+      const { peerID, userName: joinedUserName, participants } = data;
+      
       if (peerID !== socket.id) {
         setNotifications(prev => [...prev.slice(-2), {
           id: `join-${peerID}-${Date.now()}`,
-          message: `${joinedUserName} подключился`,
+          message: `${joinedUserName || 'Участник'} подключился`,
           type: 'join',
-          timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
       }
       
-      if (participants) {
+      if (participants && Array.isArray(participants)) {
         setAllParticipants(participants);
       }
     };
 
-    const handleUserLeft = ({ 
-      peerID, 
-      userName: leftUserName, 
-      timestamp,
-      participants 
-    }: { 
-      peerID: string; 
-      userName: string;
-      timestamp: string;
-      participants?: Participant[];
-    }) => {
+    // Обработчик отключения участника
+    const handleUserLeft = (data: any) => {
+      const { peerID, userName: leftUserName, participants } = data;
+      
       setNotifications(prev => [...prev.slice(-2), {
         id: `leave-${peerID}-${Date.now()}`,
-        message: `${leftUserName} отключился`,
+        message: `${leftUserName || 'Участник'} отключился`,
         type: 'leave',
-        timestamp: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
       
-      if (participants) {
+      if (participants && Array.isArray(participants)) {
         setAllParticipants(participants);
       }
     };
 
+    // Обработчик списка участников
     const handleParticipantsList = (participants: Participant[]) => {
       setAllParticipants(participants);
     };
 
-    const handleUserNameUpdated = ({ peerID, userName: updatedName }: { peerID: string; userName: string }) => {
-      console.log(`User ${peerID} updated name to ${updatedName}`);
-      
+    // Обработчик обновления имени
+    const handleUserNameUpdated = (data: any) => {
+      const { peerID, userName: updatedName } = data;
       setUserNames(prev => ({ ...prev, [peerID]: updatedName }));
       setAllParticipants(prev => 
         prev.map(p => p.id === peerID ? { ...p, name: updatedName } : p)
       );
-      
-      if (peerID !== socket.id) {
-        setNotifications(prev => [...prev.slice(-2), {
-          id: `name-update-${peerID}-${Date.now()}`,
-          message: `${updatedName} изменил(а) имя`,
-          type: 'system',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-      }
     };
 
-    const handleRaiseHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} поднял(а) руку`);
+    // Обработчик поднятия руки
+    const handleRaiseHand = (data: any) => {
+      const { peerID, userName: handUserName } = data;
       setRaisedHands(prev => new Set(prev).add(peerID));
-      
       if (peerID !== socket.id) {
         setNotifications(prev => [...prev.slice(-2), {
           id: `hand-${peerID}-${Date.now()}`,
-          message: `${userName} поднял(а) руку`,
+          message: `${handUserName} поднял(а) руку`,
           type: 'system',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
       }
     };
 
-    const handleLowerHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} опустил(а) руку`);
+    // Обработчик опускания руки
+    const handleLowerHand = (data: any) => {
+      const { peerID } = data;
       setRaisedHands(prev => {
         const newSet = new Set(prev);
         newSet.delete(peerID);
         return newSet;
       });
-      
-      if (peerID === socket.id) {
-        setIsHandRaised(false);
-      }
+      if (peerID === socket.id) setIsHandRaised(false);
     };
 
-    socket.on('user-joined', handleUserJoined);
-    socket.on('user-left', handleUserLeft);
-    socket.on('participants-list', handleParticipantsList);
-    socket.on('user-name-updated', handleUserNameUpdated);
-    socket.on(ACTIONS.RAISE_HAND, handleRaiseHand);
-    socket.on(ACTIONS.LOWER_HAND, handleLowerHand);
+    // Используем (socket as any) для обхода TypeScript типов
+    const s = socket as any;
+    
+    s.on('participant-joined', handleUserJoined);
+    s.on('participant-left', handleUserLeft);
+    s.on('participants-list', handleParticipantsList);
+    s.on('user-name-updated', handleUserNameUpdated);
+    s.on(ACTIONS.RAISE_HAND, handleRaiseHand);
+    s.on(ACTIONS.LOWER_HAND, handleLowerHand);
     
     return () => {
-      socket.off('user-joined', handleUserJoined);
-      socket.off('user-left', handleUserLeft);
-      socket.off('participants-list', handleParticipantsList);
-      socket.off('user-name-updated', handleUserNameUpdated);
-      socket.off(ACTIONS.RAISE_HAND, handleRaiseHand);
-      socket.off(ACTIONS.LOWER_HAND, handleLowerHand);
+      s.off('participant-joined', handleUserJoined);
+      s.off('participant-left', handleUserLeft);
+      s.off('participants-list', handleParticipantsList);
+      s.off('user-name-updated', handleUserNameUpdated);
+      s.off(ACTIONS.RAISE_HAND, handleRaiseHand);
+      s.off(ACTIONS.LOWER_HAND, handleLowerHand);
     };
   }, []);
 
-  // Запрашиваем список участников при загрузке
-  useEffect(() => {
-    if (roomID && devicesInitialized) {
-      socket.emit('get-participants', { roomID });
-    }
-  }, [roomID, devicesInitialized]);
-
-  // Обработка и отображение ошибок WebRTC
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -1005,31 +603,15 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
-  // Функция проверки доступности устройства
   const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
     if (!initialMediaState) return true;
     return initialMediaState[type];
   }, [initialMediaState]);
 
-  // Синхронизация треков
-  useEffect(() => {
-    if (devicesInitialized && forceSyncTracks) {
-      const timer = setTimeout(() => {
-        forceSyncTracks();
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [devicesInitialized, forceSyncTracks]);
-
   return (
     <div className={styles.roomContainer}>
-      {/* Окно выбора устройств */}
-      {showDeviceSelection && (
-        <DeviceSelection onJoin={handleDeviceSelection} />
-      )}
+      {showDeviceSelection && <DeviceSelection onJoin={handleDeviceSelection} />}
 
-      {/* Оверлей с ошибками */}
       {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) || 
        (clients.length === 0 && devicesInitialized) || 
        !webRTCStatus.isSupported ? (
@@ -1049,9 +631,7 @@ const Room: React.FC = () => {
                   ? 'Не удалось найти медиаустройства'
                   : mediaError.message}
               </p>
-              <button onClick={handleRetry} className={styles.retryButton}>
-                Попробовать снова
-              </button>
+              <button onClick={handleRetry} className={styles.retryButton}>Попробовать снова</button>
             </>
           ) : (
             <>
@@ -1062,8 +642,7 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
-      {/* Видео потоки участников */}
-      {videoLayouts.map(({ clientID, layout, isScreenShare }) => {
+      {videoLayouts.map(({ clientID, layout }) => {
         const isLocal = clientID === LOCAL_VIDEO;
         const hasMediaStream = isLocal ? 
           (mediaState.audio || mediaState.video || mediaState.screen) : 
@@ -1075,11 +654,7 @@ const Room: React.FC = () => {
             data-client-id={clientID}
             className={`${styles.videoWrapper} ${
               fullscreenParticipant === clientID ? styles.videoWrapperFullscreen : ''
-            } ${
-              fullscreenParticipant && fullscreenParticipant !== clientID ? styles.videoWrapperHidden : ''
-            } ${isScreenShare ? styles.screenShareWrapper : ''} ${
-              !hasMediaStream ? styles.noMediaWrapper : ''
-            }`}
+            } ${fullscreenParticipant && fullscreenParticipant !== clientID ? styles.videoWrapperHidden : ''}`}
             style={layout}
           >
             <video
@@ -1092,17 +667,6 @@ const Room: React.FC = () => {
               } ${!participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''}`}
             />
             
-            {/* Индикатор демонстрации экрана */}
-            {isScreenShare && (
-              <div className={styles.screenShareBadge}>
-                <span className={styles.screenShareIcon}>🖥️</span>
-                <span className={styles.screenShareText}>
-                  {isLocal ? 'Вы демонстрируете экран' : 'Демонстрация экрана'}
-                </span>
-              </div>
-            )}
-            
-            {/* Красивый индикатор поднятой руки */}
             {raisedHands.has(clientID) && (
               <div className={styles.handRaisedBadge}>
                 <div className={styles.handIconWrapper}>
@@ -1111,7 +675,6 @@ const Room: React.FC = () => {
               </div>
             )}
             
-            {/* Плейсхолдер для участников без видео */}
             {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject || 
               (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0)) && (
               <div className={styles.participantPlaceholder}>
@@ -1121,24 +684,15 @@ const Room: React.FC = () => {
                 <div className={styles.participantName}>
                   {escapeHtml(getUserDisplayName(clientID))}
                 </div>
-                <div className={styles.participantStatus}>
-                  📹 Нет видео
-                </div>
+                <div className={styles.participantStatus}>📹 Нет видео</div>
               </div>
             )}
             
-            {/* Верхняя панель управления */}
             <div className={styles.videoTopControls}>
-              {/* Кнопка полноэкранного режима */}
-              <button 
-                className={styles.fullscreenButton}
-                onClick={() => toggleFullscreen(clientID)}
-                title={fullscreenParticipant === clientID ? "Уменьшить" : "Увеличить"}
-              >
+              <button className={styles.fullscreenButton} onClick={() => toggleFullscreen(clientID)}>
                 {fullscreenParticipant === clientID ? '⤢' : '⤡'}
               </button>
 
-              {/* Кнопки управления для других участников */}
               {clientID !== LOCAL_VIDEO && (
                 <div className={styles.participantControls}>
                   <button
@@ -1146,7 +700,6 @@ const Room: React.FC = () => {
                       !participantSettings[clientID]?.videoEnabled ? styles.participantControlButtonActive : ''
                     }`}
                     onClick={() => toggleParticipantVideo(clientID)}
-                    title={participantSettings[clientID]?.videoEnabled ? "Скрыть видео" : "Показать видео"}
                   >
                     📹
                   </button>
@@ -1155,7 +708,6 @@ const Room: React.FC = () => {
                       !participantSettings[clientID]?.audioEnabled ? styles.participantControlButtonActive : ''
                     }`}
                     onClick={() => toggleParticipantAudio(clientID)}
-                    title={participantSettings[clientID]?.audioEnabled ? "Отключить звук" : "Включить звук"}
                   >
                     🎤
                   </button>
@@ -1163,200 +715,113 @@ const Room: React.FC = () => {
               )}
             </div>
 
-            {/* Нижняя метка пользователя */}
             <div className={styles.userLabel}>
               {escapeHtml(getUserDisplayName(clientID))}
-              
-              {/* Индикаторы состояния медиа */}
               {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
               {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
               {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
-              
-              {/* Индикаторы отключенного контента */}
-              {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
-                <span className={styles.videoDisabledIndicator}>📹❌</span>
-              )}
-              {!participantSettings[clientID]?.audioEnabled && clientID !== LOCAL_VIDEO && (
-                <span className={styles.audioDisabledIndicator}>🎤❌</span>
-              )}
+              {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && <span>📹❌</span>}
+              {!participantSettings[clientID]?.audioEnabled && clientID !== LOCAL_VIDEO && <span>🎤❌</span>}
             </div>
           </div>
         );
       })}
 
-      {/* Кнопка выхода из полноэкранного режима */}
       {fullscreenParticipant && (
-        <button 
-          className={styles.exitFullscreenButton}
-          onClick={handleExitFullscreen}
-          title="Выйти из полноэкранного режима"
-        >
+        <button className={styles.exitFullscreenButton} onClick={handleExitFullscreen}>
           ✕ Выйти из полноэкранного режима
         </button>
       )}
 
-      {/* Панель управления */}
       <div className={styles.controls}>
-        {/* Кнопка микрофона */}
         <button
           onClick={() => toggleMedia('audio')}
           className={`${styles.controlButton} ${
             mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
           } ${!isDeviceEnabled('audio') ? styles.controlButtonDisabled : ''}`}
-          title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-          aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
           disabled={!isDeviceEnabled('audio')}
         >
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
 
-        {/* Кнопка камеры */}
         <button
           onClick={() => toggleMedia('video')}
           className={`${styles.controlButton} ${
             mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
           } ${!isDeviceEnabled('video') ? styles.controlButtonDisabled : ''}`}
-          title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-          aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
           disabled={!isDeviceEnabled('video')}
         >
           {mediaState.video ? '📹' : '📷'}
         </button>
 
-        {/* Кнопка демонстрации экрана */}
         {!isMobile && (
           !mediaState.screen ? (
-            <button
-              onClick={handleScreenShare}
-              className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
-              title="Начать демонстрацию экрана"
-              aria-label="Начать демонстрацию экрана"
-            >
+            <button onClick={handleScreenShare} className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}>
               🖥️
             </button>
           ) : (
-            <button
-              onClick={handleScreenShare}
-              className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}
-              title="Остановить демонстрацию экрана"
-              aria-label="Остановить демонстрацию экрана"
-            >
+            <button onClick={handleScreenShare} className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}>
               ⏹️
             </button>
           )
         )}
 
-        {/* Кнопка поднятия руки */}
         <button
           onClick={toggleHandRaise}
-          className={`${styles.controlButton} ${
-            isHandRaised ? styles.controlButtonHandRaised : styles.controlButtonHand
-          }`}
-          title={isHandRaised ? "Опустить руку" : "Поднять руку"}
-          aria-label={isHandRaised ? "Опустить руку" : "Поднять руку"}
+          className={`${styles.controlButton} ${isHandRaised ? styles.controlButtonHandRaised : styles.controlButtonHand}`}
         >
           {isHandRaised ? '👇' : '✋'}
         </button>
 
-        {/* Кнопка списка участников */}
         <button
           onClick={() => setShowParticipants(!showParticipants)}
-          className={`${styles.controlButton} ${
-            showParticipants ? styles.controlButtonParticipantsActive : styles.controlButtonParticipants
-          }`}
-          title="Список участников"
-          aria-label="Список участников"
+          className={`${styles.controlButton} ${showParticipants ? styles.controlButtonParticipantsActive : styles.controlButtonParticipants}`}
         >
           👥
         </button>
 
-        {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
-          className={`${styles.controlButton} ${
-            showChat ? styles.controlButtonChatActive : styles.controlButtonChat
-          }`}
-          title={showChat ? 'Скрыть чат' : 'Показать чат'}
-          aria-label={showChat ? 'Скрыть чат' : 'Показать чат'}
+          className={`${styles.controlButton} ${showChat ? styles.controlButtonChatActive : styles.controlButtonChat}`}
         >
           💬
         </button>
 
-        {/* Кнопка настроек */}
         <button
           onClick={() => setShowSettings(!showSettings)}
-          className={`${styles.controlButton} ${
-            showSettings ? styles.controlButtonSettingsActive : styles.controlButtonSettings
-          }`}
-          title="Настройки"
-          aria-label="Настройки"
+          className={`${styles.controlButton} ${showSettings ? styles.controlButtonSettingsActive : styles.controlButtonSettings}`}
         >
           ⚙️
         </button>
 
-        {/* Кнопка копирования ссылки */}
-        <button
-          onClick={handleCopyLink}
-          className={`${styles.controlButton} ${styles.copyButton}`}
-          title="Скопировать ссылку на комнату"
-          aria-label="Скопировать ссылку на комнату"
-        >
+        <button onClick={handleCopyLink} className={`${styles.controlButton} ${styles.copyButton}`}>
           <span>🔗</span>
           {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
         </button>
 
-        {/* Кнопка выхода */}
-        <button
-          onClick={handleLeaveRoom}
-          className={`${styles.controlButton} ${styles.controlButtonLeave}`}
-          title="Выйти из комнаты"
-          aria-label="Выйти из комнаты"
-        >
+        <button onClick={handleLeaveRoom} className={`${styles.controlButton} ${styles.controlButtonLeave}`}>
           🚪
         </button>
       </div>
 
-      {/* Панель списка участников */}
       {showParticipants && (
         <div className={styles.participantsPanel}>
           <div className={styles.participantsHeader}>
             <h3>Участники ({participantsList.length})</h3>
-            <button
-              onClick={() => setShowParticipants(false)}
-              className={styles.closeParticipantsButton}
-              aria-label="Закрыть список участников"
-            >
-              ×
-            </button>
+            <button onClick={() => setShowParticipants(false)} className={styles.closeParticipantsButton}>×</button>
           </div>
-          
           <div className={styles.participantsList}>
             {participantsList.length === 0 ? (
               <div className={styles.noParticipants}>Нет участников</div>
             ) : (
               participantsList.map(participant => (
-                <div 
-                  key={participant.id} 
-                  className={`${styles.participantItem} ${participant.isLocal ? styles.local : ''}`}
-                >
-                  <div className={`${styles.participantAvatar} ${participant.isLocal ? styles.local : ''} ${
-                    participant.isScreenSharing ? styles.screenSharing : ''
-                  } ${participant.isHandRaised ? styles.handRaised : ''}`}>
-                    {participant.isHandRaised && (
-                      <div className={styles.avatarHandIcon}>✋</div>
-                    )}
-                    {participant.isScreenSharing && (
-                      <div className={styles.avatarScreenIcon}>🖥️</div>
-                    )}
-                    <span className={styles.avatarInitial}>
-                      {escapeHtml(participant.name.charAt(0))}
-                    </span>
+                <div key={participant.id} className={`${styles.participantItem} ${participant.isLocal ? styles.local : ''}`}>
+                  <div className={`${styles.participantAvatar} ${participant.isLocal ? styles.local : ''} ${participant.isHandRaised ? styles.handRaised : ''}`}>
+                    {participant.isHandRaised && <div className={styles.avatarHandIcon}>✋</div>}
+                    <span className={styles.avatarInitial}>{escapeHtml(participant.name.charAt(0))}</span>
                   </div>
                   <div className={styles.participantInfo}>
-                    <div className={styles.participantName}>
-                      {escapeHtml(participant.name)}
-                      {participant.isLocal && ' (Вы)'}
-                    </div>
+                    <div className={styles.participantName}>{escapeHtml(participant.name)}{participant.isLocal && ' (Вы)'}</div>
                   </div>
                 </div>
               ))
@@ -1365,82 +830,44 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Чат */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
             <span>Чат комнаты</span>
-            <button
-              onClick={() => setShowChat(false)}
-              className={styles.chatCloseButton}
-              aria-label="Закрыть чат"
-            >
-              ×
-            </button>
+            <button onClick={() => setShowChat(false)} className={styles.chatCloseButton}>×</button>
           </div>
-          <div ref={chatContainerRef} className={styles.chatMessages} aria-live="polite">
+          <div ref={chatContainerRef} className={styles.chatMessages}>
             {messages.length === 0 ? (
               <div className={styles.noMessages}>Нет сообщений</div>
             ) : (
               messages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`${styles.message} ${msg.isLocal ? styles.messageLocal : ''}`}
-                >
-                  <div className={styles.messageSender}>
-                    {escapeHtml(getSenderLabel(msg.sender))}
-                  </div>
-                  <div
-                    className={`${styles.messageBubble} ${
-                      msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote
-                    }`}
-                    dangerouslySetInnerHTML={{ 
-                      __html: escapeHtml(msg.text).replace(/\n/g, '<br>') 
-                    }}
+                <div key={msg.id} className={`${styles.message} ${msg.isLocal ? styles.messageLocal : ''}`}>
+                  <div className={styles.messageSender}>{escapeHtml(getSenderLabel(msg.sender))}</div>
+                  <div 
+                    className={`${styles.messageBubble} ${msg.isLocal ? styles.messageBubbleLocal : styles.messageBubbleRemote}`}
+                    dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text).replace(/\n/g, '<br>') }} 
                   />
-                  <div className={styles.messageTime}>
-                    {msg.timestamp} {msg.isLocal ? '✓' : ''}
-                  </div>
+                  <div className={styles.messageTime}>{msg.timestamp} {msg.isLocal ? '✓' : ''}</div>
                 </div>
               ))
             )}
           </div>
 
-          {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
-            <button
-              className={styles.attachmentButton}
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Прикрепить файл"
-            >
-              📎
-            </button>
-
-            <input
-              type="text"
-              value={messageInput}
-              onChange={handleInputChange}
+            <button className={styles.attachmentButton} onClick={() => fileInputRef.current?.click()}>📎</button>
+            <input 
+              type="text" 
+              value={messageInput} 
+              onChange={handleInputChange} 
               onKeyPress={handleKeyPress}
-              placeholder="Введите сообщение..."
-              className={styles.chatInput}
-              aria-label="Введите сообщение"
+              placeholder="Введите сообщение..." 
+              className={styles.chatInput} 
             />
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className={styles.fileInput}
-              aria-hidden="true"
-            />
-
-            <button
-              onClick={handleSendMessage}
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className={styles.fileInput} />
+            <button 
+              onClick={handleSendMessage} 
               disabled={!messageInput.trim()}
-              className={`${styles.chatSendButton} ${
-                !messageInput.trim() ? styles.chatSendButtonDisabled : ''
-              }`}
-              aria-label="Отправить сообщение"
+              className={`${styles.chatSendButton} ${!messageInput.trim() ? styles.chatSendButtonDisabled : ''}`}
             >
               Отправить
             </button>
@@ -1448,71 +875,36 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>
-            <h3 style={{ margin: 0 }}>Настройки</h3>
-            <button
-              onClick={() => setShowSettings(false)}
-              className={styles.settingsCloseButton}
-              aria-label="Закрыть настройки"
-            >
-              ×
-            </button>
+            <h3>Настройки</h3>
+            <button onClick={() => setShowSettings(false)} className={styles.settingsCloseButton}>×</button>
           </div>
 
-          {/* Настройки имени */}
           <div className={styles.nameSettings}>
-            <label className={styles.settingsLabel}>
-              Ваше имя:
-            </label>
+            <label className={styles.settingsLabel}>Ваше имя:</label>
             <div className={styles.currentName}>{escapeHtml(userName || 'Не указано')}</div>
-            <button
-              onClick={() => setShowNameInput(true)}
-              className={styles.changeNameButton}
-            >
-              Изменить имя
-            </button>
+            <button onClick={() => setShowNameInput(true)} className={styles.changeNameButton}>Изменить имя</button>
           </div>
 
-          {/* Выбор микрофона */}
           {availableDevices.audio.length > 0 && (
             <div className={styles.settingsSection}>
-              <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
-                Микрофон:
-              </label>
-              <select
-                id="audioDeviceSelect"
-                onChange={(e) => switchMediaDevice('audio', e.target.value)}
-                className={styles.settingsSelect}
-                aria-label="Выберите микрофон"
-              >
+              <label className={styles.settingsLabel}>Микрофон:</label>
+              <select onChange={(e) => switchMediaDevice('audio', e.target.value)} className={styles.settingsSelect}>
                 {availableDevices.audio.map((device, index) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Микрофон ${index + 1}`}
-                  </option>
+                  <option key={device.deviceId} value={device.deviceId}>{device.label || `Микрофон ${index + 1}`}</option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Выбор камеры */}
           {availableDevices.video.length > 0 && (
             <div className={styles.settingsSection}>
-              <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
-                Камера:
-              </label>
-              <select
-                id="videoDeviceSelect"
-                onChange={(e) => switchMediaDevice('video', e.target.value)}
-                className={styles.settingsSelect}
-                aria-label="Выберите камеру"
-              >
+              <label className={styles.settingsLabel}>Камера:</label>
+              <select onChange={(e) => switchMediaDevice('video', e.target.value)} className={styles.settingsSelect}>
                 {availableDevices.video.map((device, index) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Камера ${index + 1}`}
-                  </option>
+                  <option key={device.deviceId} value={device.deviceId}>{device.label || `Камера ${index + 1}`}</option>
                 ))}
               </select>
             </div>
@@ -1520,62 +912,38 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Модальное окно изменения имени */}
       {showNameInput && (
         <div className={styles.nameInputOverlay}>
           <div className={styles.nameInputModal}>
             <h3>Изменение имени</h3>
-            <input
-              type="text"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
+            <input 
+              type="text" 
+              value={userName} 
+              onChange={(e) => setUserName(e.target.value)} 
               placeholder="Введите ваше имя"
-              className={styles.nameInputField}
-              maxLength={50}
+              className={styles.nameInputField} 
+              maxLength={50} 
             />
             <div className={styles.nameInputButtons}>
-              <button
-                onClick={() => setShowNameInput(false)}
-                className={styles.cancelButton}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleSaveName}
-                className={styles.saveButton}
-              >
-                Сохранить
-              </button>
+              <button onClick={() => setShowNameInput(false)} className={styles.cancelButton}>Отмена</button>
+              <button onClick={handleSaveName} className={styles.saveButton}>Сохранить</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Контейнер для уведомлений */}
       <div className={styles.notificationsContainer}>
         {notifications.slice(-3).map((notification) => (
           <div 
-            key={notification.id}
+            key={notification.id} 
             className={`${styles.notification} ${styles[`notification${notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}`]}`}
-            onAnimationEnd={() => {
-              setTimeout(() => {
-                setNotifications(prev => 
-                  prev.filter(n => n.id !== notification.id)
-                );
-              }, 3000);
-            }}
           >
             <div className={styles.notificationIcon}>
-              {notification.type === 'join' ? '➕' : 
-               notification.type === 'leave' ? '➖' : '💬'}
+              {notification.type === 'join' ? '➕' : notification.type === 'leave' ? '➖' : '💬'}
             </div>
             <div className={styles.notificationContent}>
-              <div className={styles.notificationMessage}>
-                {escapeHtml(notification.message)}
-              </div>
-              <div className={styles.notificationTime}>
-                {notification.timestamp}
-              </div>
+              <div className={styles.notificationMessage}>{escapeHtml(notification.message)}</div>
+              <div className={styles.notificationTime}>{notification.timestamp}</div>
             </div>
           </div>
         ))}

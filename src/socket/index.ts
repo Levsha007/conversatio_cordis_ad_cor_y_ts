@@ -1,142 +1,40 @@
-// Импорт библиотеки Socket.IO клиента и типов
-import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import { ACTIONS } from './actions';
 
-/**
- * Интерфейс для сообщения чата
- */
-interface ChatMessage {
-  id: string;          // Уникальный ID сообщения
-  sender: string;      // ID отправителя
-  message: string;     // Текст сообщения
-  timestamp: string;   // Временная метка
-  userNumber?: number; // Номер пользователя
-  userName?: string;   // Имя пользователя
-}
-
-/**
- * Интерфейс для прикреплённого файла в чате
- */
-interface FileAttachment {
-  id: string;          // Уникальный ID события
-  sender: string;      // ID отправителя
-  fileName: string;    // Имя файла
-  timestamp: string;   // Временная метка
-}
-
-/**
- * Интерфейс для информации об участнике
- */
-interface ParticipantInfo {
-  id: string;          // ID участника
-  name: string;        // Имя участника
-  isOnline: boolean;   // Онлайн статус
-}
-
-/**
- * Типы событий, которые может получать клиент от сервера
- */
 interface ServerToClientEvents {
-  [ACTIONS.ADD_PEER]: (params: { 
-    peerID: string, 
-    createOffer: boolean, 
-    userNumber?: number,
-    userName?: string 
-  }) => void;
+  [ACTIONS.ADD_PEER]: (params: { peerID: string; createOffer: boolean; userName?: string; hasMedia?: boolean }) => void;
   [ACTIONS.REMOVE_PEER]: (params: { peerID: string }) => void;
-  [ACTIONS.ICE_CANDIDATE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
-  [ACTIONS.SESSION_DESCRIPTION]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
-  [ACTIONS.CHAT_MESSAGE]: (params: { 
-    id: string;
-    sender: string;
-    message: string;
-    timestamp: string;
-    userNumber?: number;
-    userName?: string;
-  }) => void;
-  [ACTIONS.CHAT_HISTORY]: (messages: (ChatMessage | FileAttachment)[]) => void;
-  [ACTIONS.FILE_ATTACHED]: (params: FileAttachment) => void;
+  [ACTIONS.CHAT_MESSAGE]: (params: { id: string; sender: string; message: string; timestamp: string; userName?: string }) => void;
+  [ACTIONS.CHAT_HISTORY]: (messages: any[]) => void;
   [ACTIONS.RAISE_HAND]: (params: { peerID: string; userName: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { peerID: string; userName: string }) => void;
   
-  'user-joined': (params: { 
-    peerID: string; 
-    userName: string;
-    timestamp: string;
-    participants?: ParticipantInfo[];
-  }) => void;
-  'user-left': (params: { 
-    peerID: string; 
-    userName: string;
-    timestamp: string;
-    participants?: ParticipantInfo[];
-  }) => void;
-  'user-name-updated': (params: { 
-    peerID: string; 
-    userName: string;
-  }) => void;
-  'participants-list': (participants: ParticipantInfo[]) => void;
+  'transport-created': (params: any) => void;
+  'existing-peers': (peers: Array<{ peerId: string; userName: string; hasMedia: boolean }>) => void;
+  'new-producer': (params: { peerId: string; peerName: string; kind: 'audio' | 'video'; consumerParameters: any }) => void;
+  'producer-created': (params: { kind: 'audio' | 'video'; producerId: string }) => void;
+  'user-name-updated': (params: { peerID: string; userName: string }) => void;
+  'error': (params: { message: string }) => void;
 }
 
-/**
- * Типы событий, которые может отправлять клиент серверу
- */
 interface ClientToServerEvents {
-  [ACTIONS.JOIN]: (params: { 
-    room: string;
-    userName?: string;
-  }) => void;
-  [ACTIONS.RELAY_ICE]: (params: { peerID: string, iceCandidate: RTCIceCandidateInit }) => void;
-  [ACTIONS.RELAY_SDP]: (params: { peerID: string, sessionDescription: RTCSessionDescriptionInit }) => void;
-  [ACTIONS.CHAT_MESSAGE]: (params: { 
-    roomID: string;
-    message: string;
-    id: string;
-    timestamp: string;
-    userName?: string;
-  }) => void;
+  [ACTIONS.JOIN]: (params: { room: string; userName?: string; hasMedia?: boolean }) => void;
+  [ACTIONS.CHAT_MESSAGE]: (params: { roomID: string; message: string; id: string; timestamp: string; userName?: string }) => void;
   [ACTIONS.REQUEST_CHAT_HISTORY]: (params: { roomID: string }) => void;
-  [ACTIONS.FILE_ATTACHED]: (params: {
-    roomID: string;
-    fileName: string;
-    id?: string;
-    timestamp?: string;
-  }) => void;
   [ACTIONS.LEAVE]: () => void;
   [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
   
-  'update-user-name': (params: { 
-    roomID: string; 
-    userName: string;
-  }) => void;
-  'get-participants': (params: { roomID: string }) => void;
+  'create-producer': (params: { kind: 'audio' | 'video'; rtpParameters: any }) => void;
+  'resume-consumer': (params: { peerId: string; kind: 'audio' | 'video' }) => void;
+  'update-user-name': (params: { roomID: string; userName: string }) => void;
 }
 
-/**
- * Расширенные опции для подключения к серверу
- */
-type CustomSocketOptions = Partial<ManagerOptions & SocketOptions> & {
-  "force new connection"?: boolean;
-};
-
-// Конфигурация подключения к серверу
-const options: CustomSocketOptions = {
-  "force new connection": true,
-  reconnectionAttempts: Infinity, // Бесконечные попытки переподключения
-  timeout: 10000,                 // Таймаут подключения
-  transports: ["websocket"],      // Приоритет WebSocket
-  withCredentials: true           // Поддержка кросс-доменных запросов
-};
-
-/**
- * Создание экземпляра сокета с полной типизацией
- */
 const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
-  "https://conversatio-cordis-ad-cor-y-ts.onrender.com",  
+  process.env.REACT_APP_SERVER_URL || "http://localhost:3001",
   {
-    ...options,
-    transports: ["websocket", "polling"]
+    transports: ["websocket", "polling"],
+    withCredentials: true
   }
 );
 
