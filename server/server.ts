@@ -4,28 +4,28 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
 
-// Импорт констант действий из actions.ts
 import { ACTIONS, sanitizeUserName, sanitizeMessage, validateRoomID } from './socket/actions';
+import { setupTopologyHandlers, TOPOLOGY_EVENTS } from './socket/topology-handler';
+import { bandwidthManager } from './bandwidth-manager';
 
-/**
- * Интерфейс для сообщений чата
- */
 interface ChatMessage {
-  id: string;          // Уникальный ID сообщения
-  sender: string;      // ID отправителя
-  message: string;     // Текст сообщения
-  timestamp: string;   // Временная метка
-  userNumber?: number; // Номер пользователя
-  userName?: string;   // Имя пользователя
+  id: string;
+  sender: string;
+  message: string;
+  timestamp: string;
+  userNumber?: number;
+  userName?: string;
 }
 
-// Создаем Express приложение и HTTP сервер
 const app = express();
 const server = createServer(app);
 
-// Добавляем security headers middleware
 app.use((req, res, next) => {
-  // Content Security Policy
+  // Разрешаем CORS для всех запросов
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
@@ -33,17 +33,15 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: blob:; " +
     "media-src 'self' blob:; " +
-    "connect-src 'self' wss: ws:; " +
+    "connect-src 'self' wss: ws: https:; " +
     "font-src 'self'; " +
     "frame-ancestors 'none';"
   );
   
-  // XSS Protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   
-  // Запрет кэширования для API
   if (req.path.includes('/socket.io/')) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -53,39 +51,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// Настраиваем Socket.IO сервер
+// Добавляем простой эндпоинт для проверки работоспособности
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://conversatio-cordis-ad-cor-y-ts.vercel.app", 
-      "http://localhost:3000"
+      "https://conversatio-cordis-ad-cor-y-ts.vercel.app",
+      "https://conversatio-cordis-ad-cor-y-ts.onrender.com",
+      "http://localhost:3000",
+      "http://localhost:3001"
     ],
     methods: ["GET", "POST"],
     credentials: true
   },
   transports: ["websocket", "polling"],
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  allowEIO3: true
 });
 
 const PORT = process.env.PORT || 3001;
 
-// Хранилище чатов по комнатам
 const roomChats = new Map<string, ChatMessage[]>();
-// Хранилище информации о пользователях
 const roomUserCounters = new Map<string, number>();
-// Хранилище имен пользователей
 const roomUserNames = new Map<string, Map<string, string>>();
-// Хранилище для всех участников
 const allParticipants = new Map<string, Set<string>>();
-
-// Rate limiting для сообщений
 const messageCooldown = new Map<string, number>();
 
-/**
- * Функция очистки истории чата пустой комнаты
- * @param roomID - ID комнаты
- */
 function cleanupRoom(roomID: string): void {
   const room = io.sockets.adapter.rooms.get(roomID);
   if (!room || room.size === 0) {
@@ -93,13 +88,11 @@ function cleanupRoom(roomID: string): void {
     roomUserCounters.delete(roomID);
     roomUserNames.delete(roomID);
     allParticipants.delete(roomID);
-    console.log(`Chat history cleared for room ${roomID}`);
+    bandwidthManager.cleanupRoom(roomID);
+    console.log(`[Cleanup] Room ${roomID.slice(-8)} cleared`);
   }
 }
 
-/**
- * Получение номера пользователя в комнате
- */
 function getUserNumber(roomID: string, socketId: string): number {
   if (!roomUserCounters.has(roomID)) {
     roomUserCounters.set(roomID, 1);
@@ -113,9 +106,6 @@ function getUserNumber(roomID: string, socketId: string): number {
   return userIndex + 1;
 }
 
-/**
- * Получение имени пользователя
- */
 function getUserName(roomID: string, socketId: string): string {
   if (!roomUserNames.has(roomID)) {
     roomUserNames.set(roomID, new Map());
@@ -127,9 +117,6 @@ function getUserName(roomID: string, socketId: string): string {
   return userNames.get(socketId) || `Участник ${userNumber}`;
 }
 
-/**
- * Установка имени пользователя
- */
 function setUserName(roomID: string, socketId: string, userName: string): void {
   if (!roomUserNames.has(roomID)) {
     roomUserNames.set(roomID, new Map());
@@ -139,9 +126,6 @@ function setUserName(roomID: string, socketId: string, userName: string): void {
   roomUserNames.get(roomID)!.set(socketId, cleanName);
 }
 
-/**
- * Получение списка всех участников комнаты
- */
 function getAllParticipants(roomID: string): Array<{ id: string; name: string; isOnline: boolean }> {
   const participants = Array.from(allParticipants.get(roomID) || []);
   const activeSockets = io.sockets.adapter.rooms.get(roomID) || new Set();
@@ -153,21 +137,14 @@ function getAllParticipants(roomID: string): Array<{ id: string; name: string; i
   }));
 }
 
-/**
- * Функция выхода из комнаты
- */
 function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): void {
-  // Удаляем из общего списка
   if (allParticipants.has(roomID)) {
     allParticipants.get(roomID)!.delete(socketId);
   }
 
   const userName = getUserName(roomID, socketId);
-  
-  // Получаем обновленный список участников
   const participantsList = getAllParticipants(roomID);
 
-  // Отправляем уведомление об отключении ВСЕМ участникам
   io.to(roomID).emit('user-left', {
     peerID: socketId,
     userName: userName,
@@ -175,7 +152,6 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
     participants: participantsList
   });
 
-  // Отправляем REMOVE_PEER всем ОСТАВШИМСЯ участникам
   const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
   clients.forEach(clientID => {
     if (clientID !== socketId) {
@@ -185,67 +161,58 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
     }
   });
 
-  // Автоматически опускаем руку при отключении
   io.to(roomID).emit(ACTIONS.LOWER_HAND, {
     peerID: socketId,
     userName: userName
   });
 
-  // Удаляем имя пользователя при выходе
   if (roomUserNames.has(roomID)) {
     roomUserNames.get(roomID)!.delete(socketId);
   }
 
   if (!isDisconnecting) {
-    // Только если это не автоматическое отключение, выходим из комнаты
     io.sockets.sockets.get(socketId)?.leave(roomID);
   }
 
-  console.log(`User ${socketId} (${userName}) left room ${roomID}, disconnecting: ${isDisconnecting}`);
+  bandwidthManager.removePeer(roomID, socketId);
+
+  console.log(`[Leave] ${socketId.slice(-8)} (${userName}) left room ${roomID.slice(-8)}`);
   
-  // Очищаем комнату если она пуста
   setTimeout(() => cleanupRoom(roomID), 1000);
 }
 
-/**
- * Обработчик подключения нового клиента
- * @param socket - клиентский сокет
- */
 io.on('connection', (socket: Socket) => {
-  console.log('New connection:', socket.id);
+  console.log(`[Connect] New connection: ${socket.id.slice(-8)} from ${socket.handshake.address}`);
+  
+  setupTopologyHandlers(io, socket);
 
-  /**
-   * Обработчик входа в комнату
-   * @param config - параметры входа
-   */
   socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string }) => {
     const { room: roomID, userName } = config;
     
+    console.log(`[Join request] Socket ${socket.id.slice(-8)} to room ${roomID?.slice(-8)}`);
+    
     if (!validate(roomID)) {
-      console.warn(`Invalid room ID: ${roomID}`);
+      console.warn(`[Invalid] Room ID: ${roomID}`);
       socket.emit('error', { message: 'Неверный формат комнаты' });
       return;
     }
 
-    // Добавляем участника в общий список
     if (!allParticipants.has(roomID)) {
       allParticipants.set(roomID, new Set());
     }
     allParticipants.get(roomID)!.add(socket.id);
 
+    bandwidthManager.initRoom(roomID);
+
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
-    // Сохраняем имя пользователя (очищенное)
     const cleanUserName = userName ? sanitizeUserName(userName) : `Участник ${userNumber}`;
     setUserName(roomID, socket.id, cleanUserName);
 
     const currentUserName = getUserName(roomID, socket.id);
-
-    // Получаем список всех участников
     const participantsList = getAllParticipants(roomID);
 
-    // Отправляем уведомление о подключении
     io.to(roomID).emit('user-joined', {
       peerID: socket.id,
       userName: currentUserName,
@@ -253,7 +220,6 @@ io.on('connection', (socket: Socket) => {
       participants: participantsList
     });
 
-    // Отправляем всем участникам информацию о новом пользователе
     clients.forEach(clientID => {
       const clientUserNumber = getUserNumber(roomID, clientID);
       const clientUserName = getUserName(roomID, clientID);
@@ -265,7 +231,6 @@ io.on('connection', (socket: Socket) => {
         userName: currentUserName
       });
       
-      // Отправляем новому пользователю информацию о существующих участниках
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
         createOffer: true,
@@ -274,22 +239,25 @@ io.on('connection', (socket: Socket) => {
       });
     });
 
-    // Присоединяемся к комнате
     socket.join(roomID);
-    console.log(`User ${socket.id} (${currentUserName}) joined room ${roomID} as Participant ${userNumber}`);
+    console.log(`[Join] ${socket.id.slice(-8)} (${currentUserName}) → room ${roomID.slice(-8)} as #${userNumber}`);
 
-    // Если история чата ещё не существует, создаем её
     if (!roomChats.has(roomID)) {
       roomChats.set(roomID, []);
     }
 
-    // Отправляем историю чата текущему пользователю
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
+    
+    const topology = bandwidthManager.getTopology(roomID);
+    if (topology) {
+      socket.emit(TOPOLOGY_EVENTS.TOPOLOGY_UPDATE, {
+        edges: topology.edges,
+        relayAssignments: Array.from(topology.relayAssignments.entries()),
+        timestamp: topology.timestamp
+      });
+    }
   });
 
-  /**
-   * Обработчик текстовых сообщений чата
-   */
   socket.on(ACTIONS.CHAT_MESSAGE, (data: {
     roomID: string;
     message: string;
@@ -301,37 +269,31 @@ io.on('connection', (socket: Socket) => {
 
     if (!validate(roomID)) return;
     
-    // Rate limiting
     const now = Date.now();
     const lastMessage = messageCooldown.get(socket.id) || 0;
     
-    if (now - lastMessage < 500) { // 500ms между сообщениями
-      return;
-    }
+    if (now - lastMessage < 500) return;
     messageCooldown.set(socket.id, now);
 
     const userNumber = getUserNumber(roomID, socket.id);
     const currentUserName = getUserName(roomID, socket.id);
 
-    // Если передано новое имя, обновляем его (очищенное)
     if (userName && userName !== currentUserName) {
       const cleanName = sanitizeUserName(userName);
       setUserName(roomID, socket.id, cleanName);
       
-      // Отправляем всем обновление имени
       io.to(roomID).emit('user-name-updated', {
         peerID: socket.id,
         userName: getUserName(roomID, socket.id)
       });
     }
 
-    // Очищаем сообщение для хранения
     const cleanMessage = sanitizeMessage(message);
 
     const chatMessage: ChatMessage = {
       id: id || `${socket.id}-${Date.now()}`,
       sender: socket.id,
-      message: cleanMessage, // Сохраняем очищенное сообщение
+      message: cleanMessage,
       timestamp: timestamp || new Date().toISOString(),
       userNumber: userNumber,
       userName: getUserName(roomID, socket.id)
@@ -349,7 +311,6 @@ io.on('connection', (socket: Socket) => {
 
     roomMessages.push(chatMessage);
     
-    // Рассылаем всем участникам
     io.to(roomID).emit(ACTIONS.CHAT_MESSAGE, {
       ...chatMessage,
       userNumber: userNumber,
@@ -357,65 +318,49 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
-  /**
-   * Обработчик обновления имени пользователя
-   */
   socket.on('update-user-name', (data: { roomID: string; userName: string }) => {
     const { roomID, userName } = data;
     
     if (!validate(roomID)) return;
     
-    // Очищаем имя пользователя
     const cleanUserName = sanitizeUserName(userName);
     setUserName(roomID, socket.id, cleanUserName);
     const currentUserName = getUserName(roomID, socket.id);
     
-    // Отправляем всем обновление имени
     io.to(roomID).emit('user-name-updated', {
       peerID: socket.id,
       userName: currentUserName
     });
     
-    console.log(`User ${socket.id} updated name to ${currentUserName}`);
+    console.log(`[Name] ${socket.id.slice(-8)} → ${currentUserName}`);
   });
 
-  /**
-   * Обработчик поднятия руки
-   */
   socket.on(ACTIONS.RAISE_HAND, ({ roomID }: { roomID: string }) => {
     if (!validate(roomID)) return;
     
     const userName = getUserName(roomID, socket.id);
     
-    // Рассылаем всем участникам комнаты
     io.to(roomID).emit(ACTIONS.RAISE_HAND, {
       peerID: socket.id,
       userName: userName
     });
     
-    console.log(`User ${socket.id} (${userName}) raised hand in room ${roomID}`);
+    console.log(`[Hand] ${socket.id.slice(-8)} raised hand in room ${roomID.slice(-8)}`);
   });
 
-  /**
-   * Обработчик опускания руки
-   */
   socket.on(ACTIONS.LOWER_HAND, ({ roomID }: { roomID: string }) => {
     if (!validate(roomID)) return;
     
     const userName = getUserName(roomID, socket.id);
     
-    // Рассылаем всем участникам комнаты
     io.to(roomID).emit(ACTIONS.LOWER_HAND, {
       peerID: socket.id,
       userName: userName
     });
     
-    console.log(`User ${socket.id} (${userName}) lowered hand in room ${roomID}`);
+    console.log(`[Hand] ${socket.id.slice(-8)} lowered hand in room ${roomID.slice(-8)}`);
   });
 
-  /**
-   * Обработчик запроса истории чата
-   */
   socket.on(ACTIONS.REQUEST_CHAT_HISTORY, ({ roomID }: { roomID: string }) => {
     if (roomChats.has(roomID)) {
       socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
@@ -424,9 +369,6 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  /**
-   * Обработчик запроса списка участников
-   */
   socket.on('get-participants', ({ roomID }: { roomID: string }) => {
     if (!validate(roomID)) return;
     
@@ -434,9 +376,6 @@ io.on('connection', (socket: Socket) => {
     socket.emit('participants-list', participants);
   });
 
-  /**
-   * Обработчик выхода из комнаты
-   */
   socket.on(ACTIONS.LEAVE, () => {
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
@@ -448,60 +387,59 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
-  /**
-   * Обработчик передачи SDP (Session Description Protocol)
-   */
   socket.on(ACTIONS.RELAY_SDP, ({
     peerID,
-    sessionDescription
+    sessionDescription,
+    isRelayForward,
+    sourcePeerId
   }: {
     peerID: string;
     sessionDescription: RTCSessionDescriptionInit;
+    isRelayForward?: boolean;
+    sourcePeerId?: string;
   }) => {
     io.to(peerID).emit(ACTIONS.SESSION_DESCRIPTION, {
       peerID: socket.id,
       sessionDescription,
+      isRelayForward: isRelayForward || false,
+      sourcePeerId: sourcePeerId || null
     });
   });
 
-  /**
-   * Обработчик передачи ICE кандидатов
-   */
   socket.on(ACTIONS.RELAY_ICE, ({
     peerID,
-    iceCandidate
+    iceCandidate,
+    isRelayForward,
+    sourcePeerId
   }: {
     peerID: string;
     iceCandidate: RTCIceCandidateInit;
+    isRelayForward?: boolean;
+    sourcePeerId?: string;
   }) => {
     io.to(peerID).emit(ACTIONS.ICE_CANDIDATE, {
       peerID: socket.id,
       iceCandidate,
+      isRelayForward: isRelayForward || false,
+      sourcePeerId: sourcePeerId || null
     });
   });
 
-  /**
-   * Обработчик отключения (перед фактическим отключением)
-   */
   socket.on('disconnecting', (reason) => {
-    console.log(`User disconnecting: ${socket.id}, reason: ${reason}`);
+    console.log(`[Disconnecting] ${socket.id.slice(-8)}, reason: ${reason}`);
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
       roomID !== socket.id && validate(roomID)
     );
 
-    // Для каждой комнаты вызываем leaveRoom с флагом disconnecting
     realRooms.forEach(roomID => {
       leaveRoom(roomID, socket.id, true);
     });
   });
 
-  /**
-   * Обработчик полного отключения
-   */
   socket.on('disconnect', (reason) => {
-    console.log(`User disconnected: ${socket.id}, reason: ${reason}`);
+    console.log(`[Disconnect] ${socket.id.slice(-8)}, reason: ${reason}`);
     messageCooldown.delete(socket.id);
     
     const rooms = Array.from(socket.rooms);
@@ -515,9 +453,10 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-/**
- * Запуск сервера
- */
 server.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+  console.log(`\n========================================`);
+  console.log(`[Server] Started on port ${PORT}`);
+  console.log(`[WebSocket] Ready for connections`);
+  console.log(`[Bandwidth] Topology recalculation interval: 10 seconds`);
+  console.log(`========================================\n`);
 });

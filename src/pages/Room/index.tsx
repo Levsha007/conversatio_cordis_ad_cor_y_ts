@@ -1,3 +1,5 @@
+// src/pages/Room/index.tsx
+
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useWebRTC, { LOCAL_VIDEO } from '../../hooks/useWebRTC';
@@ -5,17 +7,11 @@ import socket from '../../socket';
 import { ACTIONS } from '../../socket/actions';
 import styles from './Room.module.css';
 
-/**
- * Интерфейс для описания параметров расположения видео элементов
- */
 interface LayoutItem {
   width: string;
   height: string;
 }
 
-/**
- * Интерфейс для сообщений чата
- */
 interface ChatMessage {
   id: string;
   text: string;
@@ -25,26 +21,17 @@ interface ChatMessage {
   userName?: string;
 }
 
-/**
- * Интерфейс для настроек устройств
- */
 interface DeviceSettings {
   audio: boolean;
   video: boolean;
 }
 
-/**
- * Интерфейс для участника
- */
 interface Participant {
   id: string;
   name: string;
   isOnline: boolean;
 }
 
-/**
- * Кастомный хук для определения мобильного устройства
- */
 const useIsMobile = (): boolean => {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -56,9 +43,6 @@ const useIsMobile = (): boolean => {
   return isMobile;
 };
 
-/**
- * Кастомный хук для синхронизации вкладок
- */
 const useTabSync = (roomId: string) => {
   const navigate = useNavigate();
   useEffect(() => {
@@ -86,9 +70,6 @@ const useTabSync = (roomId: string) => {
   }, [roomId, navigate]);
 };
 
-/**
- * Функция экранирования HTML для безопасного отображения пользовательского ввода
- */
 const escapeHtml = (text: string): string => {
   if (!text) return '';
   
@@ -103,9 +84,6 @@ const escapeHtml = (text: string): string => {
   return text.replace(/[&<>"']/g, (char) => map[char]);
 };
 
-/**
- * Компонент выбора устройств перед входом в комнату
- */
 const DeviceSelection: React.FC<{
   onJoin: (settings: DeviceSettings, userName: string) => void;
 }> = ({ onJoin }) => {
@@ -114,28 +92,90 @@ const DeviceSelection: React.FC<{
     audio: true,
     video: true
   });
+  const [availableDevices, setAvailableDevices] = useState<{ audio: MediaDeviceInfo[]; video: MediaDeviceInfo[] }>({
+    audio: [],
+    video: []
+  });
+  const [hasMediaError, setHasMediaError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        setIsLoading(true);
+        let hasAudio = false;
+        let hasVideo = false;
+        
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          hasAudio = stream.getAudioTracks().length > 0;
+          hasVideo = stream.getVideoTracks().length > 0;
+          stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+          console.warn('[DeviceSelection] Could not get initial media:', err);
+        }
+        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(d => d.kind === 'audioinput');
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        
+        setAvailableDevices({
+          audio: audioDevices,
+          video: videoDevices
+        });
+        
+        setInitialSettings({
+          audio: hasAudio && audioDevices.length > 0,
+          video: hasVideo && videoDevices.length > 0
+        });
+        
+        setHasMediaError(audioDevices.length === 0 && videoDevices.length === 0);
+      } catch (err) {
+        console.error('[DeviceSelection] Error getting devices:', err);
+        setHasMediaError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    getDevices();
+  }, []);
 
   const handleJoin = () => {
     onJoin(initialSettings, name.trim() || `Участник ${Math.floor(Math.random() * 1000) + 1}`);
   };
 
-  const toggleSetting = (type: keyof DeviceSettings) => {
-    setInitialSettings(prev => ({
-      ...prev,
-      [type]: !prev[type]
-    }));
+  const toggleAudio = () => {
+    setInitialSettings(prev => ({ ...prev, audio: !prev.audio }));
   };
+
+  const toggleVideo = () => {
+    setInitialSettings(prev => ({ ...prev, video: !prev.video }));
+  };
+
+  if (isLoading) {
+    return (
+      <div className={styles.deviceSelectionOverlay}>
+        <div className={styles.deviceSelectionModal}>
+          <h2>Загрузка...</h2>
+          <p>Проверка устройств...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.deviceSelectionOverlay}>
       <div className={styles.deviceSelectionModal}>
         <h2>Настройка перед входом</h2>
         
-        <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(179, 0, 0, 0.1)', borderRadius: '8px' }}>
-          <p style={{ color: '#ffffff', fontWeight: 'bold' }}>
-            ⚠️ Для изменения выбора устройств потребуется перезагрузка страницы
-          </p>
-        </div>
+        {hasMediaError && (
+          <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(255, 0, 0, 0.2)', borderRadius: '8px' }}>
+            <p style={{ color: '#ff9999', fontWeight: 'bold' }}>
+              ⚠️ Не удалось получить доступ к медиаустройствам. Проверьте разрешения в браузере.
+            </p>
+          </div>
+        )}
         
         <div className={styles.nameInputSection}>
           <label className={styles.nameLabel}>Ваше имя (необязательно):</label>
@@ -159,14 +199,19 @@ const DeviceSelection: React.FC<{
             <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>🎤</span>
               <span className={styles.deviceName}>Микрофон</span>
-              <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.audio ? 'Будет использоваться' : 'Не будет использоваться'}
-              </span>
+              {availableDevices.audio.length > 0 ? (
+                <span className={`${styles.deviceState} ${initialSettings.audio ? styles.deviceOn : styles.deviceOff}`}>
+                  {initialSettings.audio ? 'Будет использоваться' : 'Не будет использоваться'}
+                </span>
+              ) : (
+                <span className={styles.deviceOff}>Нет устройств</span>
+              )}
             </div>
             <button
               className={`${styles.toggleButton} ${initialSettings.audio ? styles.toggleOn : styles.toggleOff}`}
-              onClick={() => toggleSetting('audio')}
+              onClick={toggleAudio}
               type="button"
+              disabled={availableDevices.audio.length === 0}
             >
               <div className={styles.toggleSlider} />
             </button>
@@ -176,14 +221,19 @@ const DeviceSelection: React.FC<{
             <div className={styles.deviceStatus}>
               <span className={styles.deviceIcon}>📹</span>
               <span className={styles.deviceName}>Камера</span>
-              <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
-                {initialSettings.video ? 'Будет использоваться' : 'Не будет использоваться'}
-              </span>
+              {availableDevices.video.length > 0 ? (
+                <span className={`${styles.deviceState} ${initialSettings.video ? styles.deviceOn : styles.deviceOff}`}>
+                  {initialSettings.video ? 'Будет использоваться' : 'Не будет использоваться'}
+                </span>
+              ) : (
+                <span className={styles.deviceOff}>Нет устройств</span>
+              )}
             </div>
             <button
               className={`${styles.toggleButton} ${initialSettings.video ? styles.toggleOn : styles.toggleOff}`}
-              onClick={() => toggleSetting('video')}
+              onClick={toggleVideo}
               type="button"
+              disabled={availableDevices.video.length === 0}
             >
               <div className={styles.toggleSlider} />
             </button>
@@ -203,9 +253,6 @@ const DeviceSelection: React.FC<{
   );
 };
 
-/**
- * Функция расчета расположения видео элементов (обычный режим)
- */
 function calculateLayout(
   clientsCount: number = 1, 
   isMobile: boolean, 
@@ -257,9 +304,6 @@ function calculateLayout(
   }).flat();
 }
 
-/**
- * Функция расчета расположения с поддержкой демонстрации экрана
- */
 function calculateLayoutWithScreenShare(
   clients: string[],
   isMobile: boolean,
@@ -290,7 +334,6 @@ function calculateLayoutWithScreenShare(
             isScreenShare: true
           };
         } else {
-          const index = otherClients.indexOf(client);
           const totalOthers = otherClients.length;
           return {
             clientID: client,
@@ -311,7 +354,6 @@ function calculateLayoutWithScreenShare(
             isScreenShare: true
           };
         } else {
-          const index = otherClients.indexOf(client);
           const totalOthers = otherClients.length;
           return {
             clientID: client,
@@ -334,16 +376,12 @@ function calculateLayoutWithScreenShare(
   }));
 }
 
-/**
- * Основной компонент комнаты видеоконференции
- */
 const Room: React.FC = () => {
   const navigate = useNavigate();
   const { id: roomID } = useParams<{ id: string }>();
   useTabSync(roomID || '');
   const isMobile = useIsMobile();
 
-  // Использование кастомного хука WebRTC
   const {
     clients,
     provideMediaRef,
@@ -369,7 +407,6 @@ const Room: React.FC = () => {
     toggleParticipantAudio
   } = useWebRTC(roomID || '');
 
-  // Состояния компонента
   const [showDeviceSelection, setShowDeviceSelection] = useState(true);
   const [devicesInitialized, setDevicesInitialized] = useState(false);
   const [fullscreenParticipant, setFullscreenParticipant] = useState<string | null>(null);
@@ -397,11 +434,9 @@ const Room: React.FC = () => {
   const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
   const [initialMediaState, setInitialMediaState] = useState<DeviceSettings | null>(null);
   
-  // Состояния для поднятия руки
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
 
-  // Определяем, кто ведет демонстрацию экрана
   const screenShareParticipant = useMemo(() => {
     if (mediaState.screen) {
       return LOCAL_VIDEO;
@@ -423,7 +458,6 @@ const Room: React.FC = () => {
     return null;
   }, [clients, mediaState.screen, peerMediaElements]);
 
-  // Используем новый расчет лейаута с поддержкой демонстрации экрана
   const videoLayouts = useMemo(() => 
     calculateLayoutWithScreenShare(
       clients, 
@@ -434,7 +468,6 @@ const Room: React.FC = () => {
     [clients, isMobile, screenShareParticipant, fullscreenParticipant]
   );
 
-  // Обновляем список участников
   const participantsList = useMemo(() => {
     return allParticipants.map(participant => ({
       id: participant.id,
@@ -446,25 +479,16 @@ const Room: React.FC = () => {
     }));
   }, [allParticipants, screenShareParticipant, raisedHands]);
 
-  /**
-   * Получение отображаемого имени пользователя
-   */
   const getUserDisplayName = useCallback((userId: string): string => {
     if (userId === LOCAL_VIDEO) return userName || 'Вы';
     return userNames[userId] || (userNumbers[userId] ? `Участник ${userNumbers[userId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
-  /**
-   * Получение метки отправителя сообщения
-   */
   const getSenderLabel = useCallback((senderId: string): string => {
     if (senderId === socket.id) return userName || 'Вы';
     return userNames[senderId] || (userNumbers[senderId] ? `Участник ${userNumbers[senderId]}` : `Участник`);
   }, [userName, userNumbers, userNames]);
 
-  /**
-   * Обработчик отправки сообщения
-   */
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageInput.trim();
     
@@ -509,9 +533,6 @@ const Room: React.FC = () => {
     }
   }, [handleSendMessage]);
 
-  /**
-   * Обработчик поднятия/опускания руки
-   */
   const toggleHandRaise = useCallback(() => {
     if (!roomID) return;
     
@@ -538,9 +559,6 @@ const Room: React.FC = () => {
     }
   }, [roomID, isHandRaised]);
 
-  /**
-   * Обработчик выбора устройств
-   */
   const handleDeviceSelection = async (settings: DeviceSettings, name: string) => {
     setShowDeviceSelection(false);
     setUserName(name);
@@ -550,9 +568,6 @@ const Room: React.FC = () => {
     setDevicesInitialized(true);
   };
 
-  /**
-   * Переключение полноэкранного режима для участника
-   */
   const toggleFullscreen = useCallback((clientID: string) => {
     if (fullscreenParticipant === clientID) {
       setFullscreenParticipant(null);
@@ -571,9 +586,6 @@ const Room: React.FC = () => {
     }
   }, [fullscreenParticipant]);
 
-  /**
-   * Обработчик выхода из полноэкранного режима
-   */
   const handleExitFullscreen = useCallback(() => {
     setFullscreenParticipant(null);
     if (document.fullscreenElement) {
@@ -581,9 +593,6 @@ const Room: React.FC = () => {
     }
   }, []);
 
-  /**
-   * Копирование ссылки на комнату в буфер обмена
-   */
   const handleCopyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -595,9 +604,6 @@ const Room: React.FC = () => {
     }
   }, []);
 
-  /**
-   * Выход из комнаты с подтверждением
-   */
   const handleLeaveRoom = useCallback(() => {
     if (window.confirm('Вы уверены, что хотите выйти из комнаты?')) {
       if (isHandRaised && roomID) {
@@ -607,18 +613,12 @@ const Room: React.FC = () => {
     }
   }, [navigate, isHandRaised, roomID]);
 
-  /**
-   * Повторная попытка подключения
-   */
   const handleRetry = useCallback(async () => {
     setRetryCount(prev => prev + 1);
     errorShown.current = false;
     await reconnect();
   }, [reconnect]);
 
-  /**
-   * Запуск демонстрации экрана
-   */
   const handleStartScreenShare = useCallback(async () => {
     try {
       await startScreenShare();
@@ -636,16 +636,10 @@ const Room: React.FC = () => {
     }
   }, [startScreenShare]);
 
-  /**
-   * Остановка демонстрации экрана
-   */
   const handleStopScreenShare = useCallback(() => {
     stopScreenShare();
   }, [stopScreenShare]);
 
-  /**
-   * Обработчик демонстрации экрана
-   */
   const handleScreenShare = useCallback(async () => {
     if (mediaState.screen) {
       handleStopScreenShare();
@@ -661,9 +655,6 @@ const Room: React.FC = () => {
     }
   }, [mediaState.screen, handleStartScreenShare, handleStopScreenShare, isHandRaised, roomID, toggleHandRaise]);
 
-  /**
-   * Обработчик сохранения имени
-   */
   const handleSaveName = useCallback(() => {
     if (userName.trim()) {
       const newName = userName.trim();
@@ -686,9 +677,6 @@ const Room: React.FC = () => {
     }
   }, [userName, roomID]);
 
-  /**
-   * Обработчик выбора файла
-   */
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && roomID) {
@@ -722,21 +710,18 @@ const Room: React.FC = () => {
     }
   }, [roomID, addChatMessage, userName]);
 
-  // Инициализация сообщений при монтировании
   useEffect(() => {
     if (getChatMessages) {
       setMessages(getChatMessages());
     }
   }, [getChatMessages]);
 
-  // Автопрокрутка чата
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Обработчик события выхода из полноэкранного режима
   useEffect(() => {
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
@@ -751,7 +736,6 @@ const Room: React.FC = () => {
     };
   }, []);
 
-  // Подписка на события Socket.IO для обновления номеров пользователей
   useEffect(() => {
     const handleAddPeer = ({ peerID, createOffer, userNumber, userName: peerUserName }: { 
       peerID: string; 
@@ -759,8 +743,6 @@ const Room: React.FC = () => {
       userNumber?: number;
       userName?: string;
     }) => {
-      console.log('Adding peer:', peerID, 'createOffer:', createOffer, 'userName:', peerUserName);
-      
       if (userNumber) {
         setUserNumbers(prev => ({ ...prev, [peerID]: userNumber }));
       }
@@ -791,7 +773,6 @@ const Room: React.FC = () => {
     };
   }, []);
 
-  // Подписка на события чата и запрос истории
   useEffect(() => {
     const chatMessageHandler = (msg: {
       id: string;
@@ -863,7 +844,6 @@ const Room: React.FC = () => {
     };
   }, [roomID, addChatMessage]);
 
-  // Подписка на события уведомлений и списка участников
   useEffect(() => {
     const handleUserJoined = ({ 
       peerID, 
@@ -918,8 +898,6 @@ const Room: React.FC = () => {
     };
 
     const handleUserNameUpdated = ({ peerID, userName: updatedName }: { peerID: string; userName: string }) => {
-      console.log(`User ${peerID} updated name to ${updatedName}`);
-      
       setUserNames(prev => ({ ...prev, [peerID]: updatedName }));
       setAllParticipants(prev => 
         prev.map(p => p.id === peerID ? { ...p, name: updatedName } : p)
@@ -936,7 +914,6 @@ const Room: React.FC = () => {
     };
 
     const handleRaiseHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} поднял(а) руку`);
       setRaisedHands(prev => new Set(prev).add(peerID));
       
       if (peerID !== socket.id) {
@@ -950,7 +927,6 @@ const Room: React.FC = () => {
     };
 
     const handleLowerHand = ({ peerID, userName }: { peerID: string; userName: string }) => {
-      console.log(`${userName} опустил(а) руку`);
       setRaisedHands(prev => {
         const newSet = new Set(prev);
         newSet.delete(peerID);
@@ -979,14 +955,12 @@ const Room: React.FC = () => {
     };
   }, []);
 
-  // Запрашиваем список участников при загрузке
   useEffect(() => {
     if (roomID && devicesInitialized) {
       socket.emit('get-participants', { roomID });
     }
   }, [roomID, devicesInitialized]);
 
-  // Обработка и отображение ошибок WebRTC
   useEffect(() => {
     if ((mediaError || !webRTCStatus.isSupported) && !errorShown.current) {
       errorShown.current = true;
@@ -1005,13 +979,11 @@ const Room: React.FC = () => {
     }
   }, [mediaError, webRTCStatus, retryCount]);
 
-  // Функция проверки доступности устройства
   const isDeviceEnabled = useCallback((type: 'audio' | 'video'): boolean => {
     if (!initialMediaState) return true;
     return initialMediaState[type];
   }, [initialMediaState]);
 
-  // Синхронизация треков
   useEffect(() => {
     if (devicesInitialized && forceSyncTracks) {
       const timer = setTimeout(() => {
@@ -1024,12 +996,10 @@ const Room: React.FC = () => {
 
   return (
     <div className={styles.roomContainer}>
-      {/* Окно выбора устройств */}
       {showDeviceSelection && (
         <DeviceSelection onJoin={handleDeviceSelection} />
       )}
 
-      {/* Оверлей с ошибками */}
       {(!isMediaReady && devicesInitialized && (mediaState.audio || mediaState.video)) || 
        (clients.length === 0 && devicesInitialized) || 
        !webRTCStatus.isSupported ? (
@@ -1062,7 +1032,6 @@ const Room: React.FC = () => {
         </div>
       ) : null}
 
-      {/* Видео потоки участников */}
       {videoLayouts.map(({ clientID, layout, isScreenShare }) => {
         const isLocal = clientID === LOCAL_VIDEO;
         const hasMediaStream = isLocal ? 
@@ -1092,7 +1061,6 @@ const Room: React.FC = () => {
               } ${!participantSettings[clientID]?.videoEnabled ? styles.videoDisabled : ''}`}
             />
             
-            {/* Индикатор демонстрации экрана */}
             {isScreenShare && (
               <div className={styles.screenShareBadge}>
                 <span className={styles.screenShareIcon}>🖥️</span>
@@ -1102,7 +1070,6 @@ const Room: React.FC = () => {
               </div>
             )}
             
-            {/* Красивый индикатор поднятой руки */}
             {raisedHands.has(clientID) && (
               <div className={styles.handRaisedBadge}>
                 <div className={styles.handIconWrapper}>
@@ -1111,7 +1078,6 @@ const Room: React.FC = () => {
               </div>
             )}
             
-            {/* Плейсхолдер для участников без видео */}
             {(clientID !== LOCAL_VIDEO && (!peerMediaElements.current[clientID]?.srcObject || 
               (peerMediaElements.current[clientID]?.srcObject as MediaStream)?.getVideoTracks().length === 0)) && (
               <div className={styles.participantPlaceholder}>
@@ -1127,9 +1093,7 @@ const Room: React.FC = () => {
               </div>
             )}
             
-            {/* Верхняя панель управления */}
             <div className={styles.videoTopControls}>
-              {/* Кнопка полноэкранного режима */}
               <button 
                 className={styles.fullscreenButton}
                 onClick={() => toggleFullscreen(clientID)}
@@ -1138,7 +1102,6 @@ const Room: React.FC = () => {
                 {fullscreenParticipant === clientID ? '⤢' : '⤡'}
               </button>
 
-              {/* Кнопки управления для других участников */}
               {clientID !== LOCAL_VIDEO && (
                 <div className={styles.participantControls}>
                   <button
@@ -1163,16 +1126,13 @@ const Room: React.FC = () => {
               )}
             </div>
 
-            {/* Нижняя метка пользователя */}
             <div className={styles.userLabel}>
               {escapeHtml(getUserDisplayName(clientID))}
               
-              {/* Индикаторы состояния медиа */}
               {!mediaState.audio && clientID === LOCAL_VIDEO && <span>🔇</span>}
               {!mediaState.video && !mediaState.screen && clientID === LOCAL_VIDEO && <span>📷</span>}
               {mediaState.screen && clientID === LOCAL_VIDEO && <span className={styles.screenShareIndicator}>🖥️</span>}
               
-              {/* Индикаторы отключенного контента */}
               {!participantSettings[clientID]?.videoEnabled && clientID !== LOCAL_VIDEO && (
                 <span className={styles.videoDisabledIndicator}>📹❌</span>
               )}
@@ -1184,7 +1144,6 @@ const Room: React.FC = () => {
         );
       })}
 
-      {/* Кнопка выхода из полноэкранного режима */}
       {fullscreenParticipant && (
         <button 
           className={styles.exitFullscreenButton}
@@ -1195,42 +1154,35 @@ const Room: React.FC = () => {
         </button>
       )}
 
-      {/* Панель управления */}
       <div className={styles.controls}>
-        {/* Кнопка микрофона */}
         <button
           onClick={() => toggleMedia('audio')}
           className={`${styles.controlButton} ${
             mediaState.audio ? styles.controlButtonMicOn : styles.controlButtonMicOff
           } ${!isDeviceEnabled('audio') ? styles.controlButtonDisabled : ''}`}
           title={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
-          aria-label={mediaState.audio ? 'Выключить микрофон' : 'Включить микрофон'}
           disabled={!isDeviceEnabled('audio')}
         >
           {mediaState.audio ? '🎤' : '🔇'}
         </button>
 
-        {/* Кнопка камеры */}
         <button
           onClick={() => toggleMedia('video')}
           className={`${styles.controlButton} ${
             mediaState.video ? styles.controlButtonCamOn : styles.controlButtonCamOff
           } ${!isDeviceEnabled('video') ? styles.controlButtonDisabled : ''}`}
           title={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
-          aria-label={mediaState.video ? 'Выключить камеру' : 'Включить камеру'}
           disabled={!isDeviceEnabled('video')}
         >
           {mediaState.video ? '📹' : '📷'}
         </button>
 
-        {/* Кнопка демонстрации экрана */}
         {!isMobile && (
           !mediaState.screen ? (
             <button
               onClick={handleScreenShare}
               className={`${styles.controlButton} ${styles.controlButtonScreenShare}`}
               title="Начать демонстрацию экрана"
-              aria-label="Начать демонстрацию экрана"
             >
               🖥️
             </button>
@@ -1239,84 +1191,70 @@ const Room: React.FC = () => {
               onClick={handleScreenShare}
               className={`${styles.controlButton} ${styles.controlButtonScreenShareActive}`}
               title="Остановить демонстрацию экрана"
-              aria-label="Остановить демонстрацию экрана"
             >
               ⏹️
             </button>
           )
         )}
 
-        {/* Кнопка поднятия руки */}
         <button
           onClick={toggleHandRaise}
           className={`${styles.controlButton} ${
             isHandRaised ? styles.controlButtonHandRaised : styles.controlButtonHand
           }`}
           title={isHandRaised ? "Опустить руку" : "Поднять руку"}
-          aria-label={isHandRaised ? "Опустить руку" : "Поднять руку"}
         >
           {isHandRaised ? '👇' : '✋'}
         </button>
 
-        {/* Кнопка списка участников */}
         <button
           onClick={() => setShowParticipants(!showParticipants)}
           className={`${styles.controlButton} ${
             showParticipants ? styles.controlButtonParticipantsActive : styles.controlButtonParticipants
           }`}
           title="Список участников"
-          aria-label="Список участников"
         >
           👥
         </button>
 
-        {/* Кнопка чата */}
         <button
           onClick={() => setShowChat(!showChat)}
           className={`${styles.controlButton} ${
             showChat ? styles.controlButtonChatActive : styles.controlButtonChat
           }`}
           title={showChat ? 'Скрыть чат' : 'Показать чат'}
-          aria-label={showChat ? 'Скрыть чат' : 'Показать чат'}
         >
           💬
         </button>
 
-        {/* Кнопка настроек */}
         <button
           onClick={() => setShowSettings(!showSettings)}
           className={`${styles.controlButton} ${
             showSettings ? styles.controlButtonSettingsActive : styles.controlButtonSettings
           }`}
           title="Настройки"
-          aria-label="Настройки"
         >
           ⚙️
         </button>
 
-        {/* Кнопка копирования ссылки */}
         <button
           onClick={handleCopyLink}
           className={`${styles.controlButton} ${styles.copyButton}`}
           title="Скопировать ссылку на комнату"
-          aria-label="Скопировать ссылку на комнату"
         >
           <span>🔗</span>
           {isCopied && <span className={styles.copyLabel}>Скопировано!</span>}
         </button>
 
-        {/* Кнопка выхода */}
         <button
           onClick={handleLeaveRoom}
           className={`${styles.controlButton} ${styles.controlButtonLeave}`}
           title="Выйти из комнаты"
-          aria-label="Выйти из комнаты"
         >
           🚪
         </button>
       </div>
 
-      {/* Панель списка участников */}
       {showParticipants && (
         <div className={styles.participantsPanel}>
           <div className={styles.participantsHeader}>
@@ -1324,7 +1262,6 @@ const Room: React.FC = () => {
             <button
               onClick={() => setShowParticipants(false)}
               className={styles.closeParticipantsButton}
-              aria-label="Закрыть список участников"
             >
               ×
             </button>
@@ -1365,7 +1302,6 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Чат */}
       {showChat && (
         <div className={styles.chatContainer}>
           <div className={styles.chatHeader}>
@@ -1373,12 +1309,11 @@ const Room: React.FC = () => {
             <button
               onClick={() => setShowChat(false)}
               className={styles.chatCloseButton}
-              aria-label="Закрыть чат"
             >
               ×
             </button>
           </div>
-          <div ref={chatContainerRef} className={styles.chatMessages} aria-live="polite">
+          <div ref={chatContainerRef} className={styles.chatMessages}>
             {messages.length === 0 ? (
               <div className={styles.noMessages}>Нет сообщений</div>
             ) : (
@@ -1406,12 +1341,10 @@ const Room: React.FC = () => {
             )}
           </div>
 
-          {/* Поле ввода сообщения */}
           <div className={styles.chatInputContainer}>
             <button
               className={styles.attachmentButton}
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Прикрепить файл"
             >
               📎
             </button>
@@ -1423,7 +1356,6 @@ const Room: React.FC = () => {
               onKeyPress={handleKeyPress}
               placeholder="Введите сообщение..."
               className={styles.chatInput}
-              aria-label="Введите сообщение"
             />
 
             <input
@@ -1431,7 +1363,6 @@ const Room: React.FC = () => {
               ref={fileInputRef}
               onChange={handleFileChange}
               className={styles.fileInput}
-              aria-hidden="true"
             />
 
             <button
@@ -1440,7 +1371,6 @@ const Room: React.FC = () => {
               className={`${styles.chatSendButton} ${
                 !messageInput.trim() ? styles.chatSendButtonDisabled : ''
               }`}
-              aria-label="Отправить сообщение"
             >
               Отправить
             </button>
@@ -1448,21 +1378,18 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Панель настроек */}
       {showSettings && (
         <div className={styles.settingsPanel}>
           <div className={styles.settingsHeader}>
-            <h3 style={{ margin: 0 }}>Настройки</h3>
+            <h3>Настройки</h3>
             <button
               onClick={() => setShowSettings(false)}
               className={styles.settingsCloseButton}
-              aria-label="Закрыть настройки"
             >
               ×
             </button>
           </div>
 
-          {/* Настройки имени */}
           <div className={styles.nameSettings}>
             <label className={styles.settingsLabel}>
               Ваше имя:
@@ -1476,17 +1403,14 @@ const Room: React.FC = () => {
             </button>
           </div>
 
-          {/* Выбор микрофона */}
           {availableDevices.audio.length > 0 && (
             <div className={styles.settingsSection}>
-              <label className={styles.settingsLabel} htmlFor="audioDeviceSelect">
+              <label className={styles.settingsLabel}>
                 Микрофон:
               </label>
               <select
-                id="audioDeviceSelect"
                 onChange={(e) => switchMediaDevice('audio', e.target.value)}
                 className={styles.settingsSelect}
-                aria-label="Выберите микрофон"
               >
                 {availableDevices.audio.map((device, index) => (
                   <option key={device.deviceId} value={device.deviceId}>
@@ -1497,17 +1421,14 @@ const Room: React.FC = () => {
             </div>
           )}
 
-          {/* Выбор камеры */}
           {availableDevices.video.length > 0 && (
             <div className={styles.settingsSection}>
-              <label className={styles.settingsLabel} htmlFor="videoDeviceSelect">
+              <label className={styles.settingsLabel}>
                 Камера:
               </label>
               <select
-                id="videoDeviceSelect"
                 onChange={(e) => switchMediaDevice('video', e.target.value)}
                 className={styles.settingsSelect}
-                aria-label="Выберите камеру"
               >
                 {availableDevices.video.map((device, index) => (
                   <option key={device.deviceId} value={device.deviceId}>
@@ -1520,7 +1441,6 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Модальное окно изменения имени */}
       {showNameInput && (
         <div className={styles.nameInputOverlay}>
           <div className={styles.nameInputModal}>
@@ -1551,7 +1471,6 @@ const Room: React.FC = () => {
         </div>
       )}
 
-      {/* Контейнер для уведомлений */}
       <div className={styles.notificationsContainer}>
         {notifications.slice(-3).map((notification) => (
           <div 
