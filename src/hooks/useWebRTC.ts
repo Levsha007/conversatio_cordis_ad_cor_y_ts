@@ -151,9 +151,23 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }, cb);
   }, [updateClients]);
 
+  const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
+    audio: constraints.audio ? {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      deviceId: selectedAudioDevice ? { exact: selectedAudioDevice } : undefined
+    } : false,
+    video: constraints.video ? {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 },
+      deviceId: selectedVideoDevice ? { exact: selectedVideoDevice } : undefined
+    } : false
+  }), [selectedAudioDevice, selectedVideoDevice]);
+
   const enumerateDevices = useCallback(async (): Promise<void> => {
     try {
-      // Запрашиваем разрешения перед получением списка устройств
       await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
         .then(stream => {
           stream.getTracks().forEach(track => track.stop());
@@ -186,26 +200,10 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [selectedAudioDevice, selectedVideoDevice]);
 
-  const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
-    audio: constraints.audio ? {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      deviceId: selectedAudioDevice ? { exact: selectedAudioDevice } : undefined
-    } : false,
-    video: constraints.video ? {
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-      frameRate: { ideal: 30 },
-      deviceId: selectedVideoDevice ? { exact: selectedVideoDevice } : undefined
-    } : false
-  }), [selectedAudioDevice, selectedVideoDevice]);
-
   const initializeMedia = useCallback(async (constraints: { audio: boolean; video: boolean }, name?: string) => {
     setMediaError(null);
     setIsMediaReady(false);
     
-    // Сначала получаем список устройств
     await enumerateDevices();
     
     try {
@@ -256,10 +254,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           }
         }
         
-        // Создаём пустой поток, если не удалось получить устройства
         stream = new MediaStream();
         
-        // Если не получили устройства, пробуем без указания конкретных deviceId
         if (selectedAudioDevice || selectedVideoDevice) {
           console.log('[Media] Retrying without specific device IDs');
           const fallbackConstraints: MediaStreamConstraints = {
@@ -280,8 +276,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       localMediaStream.current = stream;
 
       setMediaState({
-        audio: constraints.audio && stream.getAudioTracks().length > 0,
-        video: constraints.video && stream.getVideoTracks().length > 0,
+        audio: constraints.audio && (stream?.getAudioTracks().length || 0) > 0,
+        video: constraints.video && (stream?.getVideoTracks().length || 0) > 0,
         screen: false
       });
 
@@ -413,9 +409,6 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     }
   }, [mediaState.screen, registerPeerConnection, addNewClient]);
 
-  // Остальные функции (applyTopology, эффекты и т.д.) остаются без изменений
-  // ... (код из предыдущей версии, который уже работал)
-
   const applyTopology = useCallback(async (edges: { from: string; to: string; type: string }[]) => {
     if (!socket.id) return;
     
@@ -463,62 +456,221 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   }, [applyTopology, activateRelayMode, configureAsWeakPeer]);
 
   const stopScreenShare = useCallback((): void => {
+    console.log('[ScreenShare] Stopping...');
+    
     if (screenShareStream.current) {
-      screenShareStream.current.getTracks().forEach(track => track.stop());
+      screenShareStream.current.getTracks().forEach(track => {
+        if (track.kind === 'video') {
+          track.stop();
+        }
+      });
       screenShareStream.current = null;
     }
+
+    const originalStream = localMediaStream.current;
+    const localVideo = peerMediaElements.current[LOCAL_VIDEO];
+    
+    if (localVideo && originalStream) {
+      localVideo.srcObject = originalStream;
+      localVideo.muted = true;
+      localVideo.play().catch(e => console.warn('[ScreenShare] Restore local video:', e));
+    } else if (localVideo) {
+      localVideo.srcObject = null;
+    }
+
+    Object.entries(peerConnections.current).forEach(async ([peerID, pc]) => {
+      try {
+        const senders = pc.getSenders();
+        
+        const originalVideoTrack = originalStream?.getVideoTracks()[0];
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+        
+        if (originalVideoTrack && videoSender) {
+          await videoSender.replaceTrack(originalVideoTrack);
+          console.log(`[ScreenShare] Restored original video for ${peerID.slice(-8)}`);
+        } else if (videoSender && !originalVideoTrack) {
+          if (videoSender.track) {
+            videoSender.track.enabled = false;
+          }
+        }
+
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
+        
+        await pc.setLocalDescription(offer);
+        
+        socket.emit(ACTIONS.RELAY_SDP, {
+          peerID,
+          sessionDescription: offer,
+        });
+        
+      } catch (err) {
+        console.error(`[ScreenShare] Error restoring peer ${peerID.slice(-8)}:`, err);
+      }
+    });
+
     setMediaState(prev => ({ ...prev, screen: false }));
+    console.log('[ScreenShare] Stopped');
   }, []);
 
   const startScreenShare = useCallback(async (): Promise<void> => {
     try {
+      console.log('[ScreenShare] Starting...');
+      
       if (screenShareStream.current) {
         screenShareStream.current.getTracks().forEach(track => track.stop());
         screenShareStream.current = null;
       }
 
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false
-      });
+      const videoConstraints: MediaTrackConstraints = {
+        frameRate: { ideal: 30, max: 60 }
+      };
+      
+      // Добавляем cursor отдельно через any, так как это расширенное свойство
+      const displayVideoConstraints: any = {
+        ...videoConstraints,
+        cursor: "always"
+      };
+      
+      const displayMediaOptions: DisplayMediaStreamOptions = {
+        video: displayVideoConstraints,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+      
+      let displayStream: MediaStream;
+      try {
+        displayStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        console.log('[ScreenShare] Display stream obtained, audio tracks:', displayStream.getAudioTracks().length);
+      } catch (err) {
+        console.warn('[ScreenShare] Could not get display with audio, retrying without audio:', err);
+        
+        const fallbackVideoConstraints: any = {
+          frameRate: { ideal: 30, max: 60 },
+          cursor: "always"
+        };
+        
+        displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: fallbackVideoConstraints,
+          audio: false
+        });
+      }
       
       const screenVideoTrack = displayStream.getVideoTracks()[0];
-      if (!screenVideoTrack) throw new Error('Не удалось получить видео с экрана');
+      if (!screenVideoTrack) {
+        throw new Error('Не удалось получить видео с экрана');
+      }
 
-      const screenStream = new MediaStream();
-      screenStream.addTrack(screenVideoTrack);
-      screenShareStream.current = screenStream;
+      const newScreenStream = new MediaStream();
+      newScreenStream.addTrack(screenVideoTrack);
+      
+      const originalAudioTrack = localMediaStream.current?.getAudioTracks()[0];
+      
+      if (originalAudioTrack && originalAudioTrack.enabled) {
+        newScreenStream.addTrack(originalAudioTrack);
+        console.log('[ScreenShare] Added microphone audio track to screen stream');
+      } else {
+        console.warn('[ScreenShare] No audio track available from local stream');
+        
+        try {
+          const audioOnlyStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const micAudioTrack = audioOnlyStream.getAudioTracks()[0];
+          if (micAudioTrack) {
+            newScreenStream.addTrack(micAudioTrack);
+            console.log('[ScreenShare] Obtained fresh microphone audio track');
+            if (!localMediaStream.current) {
+              localMediaStream.current = new MediaStream();
+            }
+            localMediaStream.current.addTrack(micAudioTrack);
+            setMediaState(prev => ({ ...prev, audio: true }));
+          }
+        } catch (audioErr) {
+          console.error('[ScreenShare] Could not get microphone access:', audioErr);
+        }
+      }
+      
+      screenShareStream.current = newScreenStream;
       setMediaState(prev => ({ ...prev, screen: true }));
 
       const localVideo = peerMediaElements.current[LOCAL_VIDEO];
       if (localVideo) {
-        localVideo.srcObject = screenStream;
-        localVideo.play().catch(e => console.error('Screen share video play error:', e));
+        localVideo.srcObject = newScreenStream;
+        localVideo.muted = true;
+        localVideo.play().catch(e => console.warn('[ScreenShare] Local video play:', e));
       }
 
-      for (const [peerID, pc] of Object.entries(peerConnections.current)) {
+      const updatePromises = Object.entries(peerConnections.current).map(async ([peerID, pc]) => {
         try {
-          const senders = pc.getSenders();
-          const videoSender = senders.find(s => s.track?.kind === 'video');
+          console.log(`[ScreenShare] Updating peer ${peerID.slice(-8)}`);
           
-          if (videoSender) {
-            await videoSender.replaceTrack(screenVideoTrack);
-          } else {
-            pc.addTrack(screenVideoTrack, screenStream);
+          const senders = pc.getSenders();
+          
+          const audioSender = senders.find(s => s.track?.kind === 'audio');
+          const currentAudioTrack = newScreenStream.getAudioTracks()[0];
+          
+          if (currentAudioTrack && audioSender) {
+            if (audioSender.track?.id !== currentAudioTrack.id) {
+              await audioSender.replaceTrack(currentAudioTrack);
+              console.log(`[ScreenShare] Replaced audio track for ${peerID.slice(-8)}`);
+            }
+          } else if (currentAudioTrack && !audioSender) {
+            pc.addTrack(currentAudioTrack, newScreenStream);
+            console.log(`[ScreenShare] Added audio track for ${peerID.slice(-8)}`);
           }
 
-          const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-          await pc.setLocalDescription(offer);
-          socket.emit(ACTIONS.RELAY_SDP, { peerID, sessionDescription: offer });
-        } catch (err) {
-          console.error(`Error updating screen share for peer ${peerID}:`, err);
-        }
-      }
+          const videoSender = senders.find(s => s.track?.kind === 'video');
+          const screenVideo = newScreenStream.getVideoTracks()[0];
+          
+          if (screenVideo) {
+            if (videoSender) {
+              await videoSender.replaceTrack(screenVideo);
+              console.log(`[ScreenShare] Replaced video with screen for ${peerID.slice(-8)}`);
+            } else {
+              pc.addTrack(screenVideo, newScreenStream);
+              console.log(`[ScreenShare] Added screen video for ${peerID.slice(-8)}`);
+            }
+          }
 
-      screenVideoTrack.addEventListener('ended', () => stopScreenShare());
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
+          
+          await pc.setLocalDescription(offer);
+          
+          socket.emit(ACTIONS.RELAY_SDP, {
+            peerID,
+            sessionDescription: offer,
+          });
+
+          console.log(`[ScreenShare] Offer sent to ${peerID.slice(-8)}`);
+
+        } catch (err) {
+          console.error(`[ScreenShare] Error updating peer ${peerID.slice(-8)}:`, err);
+        }
+      });
+
+      await Promise.all(updatePromises);
+      console.log('[ScreenShare] All peers updated');
+
+      screenVideoTrack.addEventListener('ended', () => {
+        console.log('[ScreenShare] Ended by user');
+        stopScreenShare();
+      });
+      
+      screenVideoTrack.addEventListener('mute', () => {
+        console.log('[ScreenShare] Video muted');
+      });
+
     } catch (err) {
-      console.error('Ошибка демонстрации экрана:', err);
+      console.error('[ScreenShare] Error:', err);
       setMediaError(err as Error);
+      alert('Не удалось начать демонстрацию экрана. Проверьте разрешения.');
       throw err;
     }
   }, [stopScreenShare]);

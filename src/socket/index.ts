@@ -21,7 +21,6 @@ console.log('[Socket] Connecting to:', SOCKET_URL);
 
 const socket = io(SOCKET_URL, options) as Socket<ServerToClientEvents, ClientToServerEvents>;
 
-// Встроенные события socket.io
 socket.on('connect', () => {
   console.log('[Socket] ✅ Connected! ID:', socket.id);
 });
@@ -34,8 +33,7 @@ socket.on('disconnect', (reason: string) => {
   console.log('[Socket] ⚠️ Disconnected:', reason);
 });
 
-// reconnect - встроенное событие, используем type assertion
-socket.on('reconnect' as any, (attemptNumber: number) => {
+(socket as any).on('reconnect', (attemptNumber: number) => {
   console.log('[Socket] 🔄 Reconnected after', attemptNumber, 'attempts');
 });
 
