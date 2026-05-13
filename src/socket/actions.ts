@@ -1,49 +1,26 @@
 // src/socket/actions.ts
 
-/**
- * Константы действий (именованные события) для WebSocket соединения
- * Каждое действие соответствует определённому событию в системе видеоконференций
- */
 export const ACTIONS = {
-  // Подключение к комнате
   JOIN: 'join',
-  // Выход из комнаты
   LEAVE: 'leave',
-  // Обмен списком доступных комнат
   SHARE_ROOMS: 'share-rooms',
-  // Запрос списка комнат
   GET_ROOMS: 'get-rooms',
-  // Добавление нового участника
   ADD_PEER: 'add-peer',
-  // Удаление участника
   REMOVE_PEER: 'remove-peer',
-  // Передача SDP (Session Description Protocol) данных
   RELAY_SDP: 'relay-sdp',
-  // Передача ICE (Interactive Connectivity Establishment) кандидатов
   RELAY_ICE: 'relay-ice',
-  // ICE кандидат для установки P2P соединения
   ICE_CANDIDATE: 'ice-candidate',
-  // Описание сессии WebRTC
   SESSION_DESCRIPTION: 'session-description',
-  // Сообщение в чате
   CHAT_MESSAGE: 'chat-message',
-  // История чата
   CHAT_HISTORY: 'chat-history',
-  // Запрос истории чата
   REQUEST_CHAT_HISTORY: 'request-chat-history',
-  // Прикрепление файла в чате
   FILE_ATTACHED: 'file-attached',
-  // Поднятие руки
   RAISE_HAND: 'raise-hand',
-  // Опускание руки
   LOWER_HAND: 'lower-hand'
 } as const;
 
 export default ACTIONS;
 
-/**
- * Утилиты для очистки и валидации данных
- */
 export const sanitizeInput = (input: string): string => {
   if (!input) return '';
   
@@ -58,9 +35,9 @@ export const sanitizeInput = (input: string): string => {
 };
 
 export const sanitizeUserName = (name: string): string => {
-  if (!name) return 'Участник';
+  if (!name) return 'Participant';
   const sanitized = sanitizeInput(name);
-  return sanitized || 'Участник';
+  return sanitized || 'Participant';
 };
 
 export const sanitizeMessage = (message: string): string => {
@@ -100,7 +77,6 @@ export type FileAttachedAction = {
 export type SocketAction = JoinAction | IceCandidateAction | FileAttachedAction | { type: typeof ACTIONS.LEAVE };
 export type ActionHandler<T extends SocketAction> = (action: T) => void;
 
-// Сообщение чата
 interface ChatMessage {
   id: string;
   sender: string;
@@ -110,7 +86,6 @@ interface ChatMessage {
   userName?: string;
 }
 
-// Сообщение о прикреплённом файле
 interface FileAttachment {
   id: string;
   sender: string;
@@ -118,14 +93,12 @@ interface FileAttachment {
   timestamp: string;
 }
 
-// Информация об участнике
 interface ParticipantInfo {
   id: string;
   name: string;
   isOnline: boolean;
 }
 
-// События от сервера к клиенту
 export interface ServerToClientEvents {
   [ACTIONS.ADD_PEER]: (params: { 
     peerID: string; 
@@ -153,7 +126,6 @@ export interface ServerToClientEvents {
   [ACTIONS.RAISE_HAND]: (params: { peerID: string; userName: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { peerID: string; userName: string }) => void;
   
-  // Дополнительные события для Room компонента
   'user-joined': (params: { 
     peerID: string; 
     userName: string;
@@ -176,7 +148,6 @@ export interface ServerToClientEvents {
   }) => void;
 }
 
-// События от клиента к серверу
 export interface ClientToServerEvents {
   [ACTIONS.JOIN]: (params: { 
     room: string;
@@ -214,7 +185,6 @@ export interface ClientToServerEvents {
   [ACTIONS.RAISE_HAND]: (params: { roomID: string }) => void;
   [ACTIONS.LOWER_HAND]: (params: { roomID: string }) => void;
   
-  // Дополнительные события
   'update-user-name': (params: { roomID: string; userName: string }) => void;
   'get-participants': (params: { roomID: string }) => void;
   'bandwidth-report': (params: { 

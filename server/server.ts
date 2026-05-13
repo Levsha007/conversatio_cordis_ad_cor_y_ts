@@ -86,11 +86,8 @@ const roomUserCounters = new Map<string, number>();
 const roomUserNames = new Map<string, Map<string, string>>();
 const allParticipants = new Map<string, Set<string>>();
 const messageCooldown = new Map<string, number>();
-
-// Хранилище для отслеживания вкладок: roomId -> Map<socketId, tabId>
-const roomTabs = new Map<string, Map<string, string>>();
-// Хранилище метрик времени входа: socketId -> JoinMetrics
 const joinMetrics = new Map<string, JoinMetrics>();
+const activeTabs = new Map<string, Map<string, string>>();
 
 function cleanupRoom(roomID: string): void {
   const room = io.sockets.adapter.rooms.get(roomID);
@@ -99,9 +96,9 @@ function cleanupRoom(roomID: string): void {
     roomUserCounters.delete(roomID);
     roomUserNames.delete(roomID);
     allParticipants.delete(roomID);
-    roomTabs.delete(roomID);
+    activeTabs.delete(roomID);
     bandwidthManager.cleanupRoom(roomID);
-    console.log(`[Cleanup] Room ${roomID.slice(-8)} cleared`);
+    console.log(`[CLEANUP] Room ${roomID.slice(-8)} cleared`);
   }
 }
 
@@ -149,24 +146,44 @@ function getAllParticipants(roomID: string): Array<{ id: string; name: string; i
   }));
 }
 
-function recordJoinMetric(socketId: string, roomId: string, userName: string): void {
-  joinMetrics.set(socketId, {
+function recordJoinStart(roomID: string, socketId: string, userName: string): void {
+  const metricKey = `${roomID}:${socketId}`;
+  joinMetrics.set(metricKey, {
     socketId,
-    roomId,
+    roomId: roomID,
     joinRequestTime: Date.now(),
     connectionEstablishedTime: null,
     userName
   });
 }
 
-function markConnectionEstablished(socketId: string): void {
-  const metric = joinMetrics.get(socketId);
-  if (metric && metric.connectionEstablishedTime === null) {
+function recordConnectionComplete(roomID: string, socketId: string): void {
+  const metricKey = `${roomID}:${socketId}`;
+  const metric = joinMetrics.get(metricKey);
+  if (metric && !metric.connectionEstablishedTime) {
     metric.connectionEstablishedTime = Date.now();
-    const elapsedMs = metric.connectionEstablishedTime - metric.joinRequestTime;
-    console.log(`[Metrics] Join completed: user=${metric.userName} room=${metric.roomId.slice(-8)} time=${elapsedMs}ms`);
-    joinMetrics.delete(socketId);
+    const joinTime = metric.connectionEstablishedTime - metric.joinRequestTime;
+    console.log(`[METRIC] Room ${roomID.slice(-8)} user ${metric.userName} join completed in ${joinTime}ms`);
   }
+}
+
+function isDuplicateTab(roomID: string, socketId: string, tabId: string): boolean {
+  const roomTabs = activeTabs.get(roomID);
+  if (!roomTabs) return false;
+  
+  for (const [existingSocketId, existingTabId] of roomTabs) {
+    if (existingTabId === tabId && existingSocketId !== socketId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function registerTab(roomID: string, socketId: string, tabId: string): void {
+  if (!activeTabs.has(roomID)) {
+    activeTabs.set(roomID, new Map());
+  }
+  activeTabs.get(roomID)!.set(socketId, tabId);
 }
 
 function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): void {
@@ -202,61 +219,60 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
     roomUserNames.get(roomID)!.delete(socketId);
   }
 
-  // Удаляем запись о вкладке
-  const tabs = roomTabs.get(roomID);
-  if (tabs) {
-    tabs.delete(socketId);
-    if (tabs.size === 0) {
-      roomTabs.delete(roomID);
-    }
-  }
-
   if (!isDisconnecting) {
     io.sockets.sockets.get(socketId)?.leave(roomID);
   }
 
   bandwidthManager.removePeer(roomID, socketId);
+  
+  const metricKey = `${roomID}:${socketId}`;
+  if (joinMetrics.has(metricKey)) {
+    const metric = joinMetrics.get(metricKey)!;
+    if (metric.connectionEstablishedTime) {
+      const totalTime = metric.connectionEstablishedTime - metric.joinRequestTime;
+      console.log(`[METRIC] Room ${roomID.slice(-8)} user ${userName} total connection time: ${totalTime}ms`);
+    }
+    joinMetrics.delete(metricKey);
+  }
+  
+  const roomTabs = activeTabs.get(roomID);
+  if (roomTabs) {
+    roomTabs.delete(socketId);
+    if (roomTabs.size === 0) {
+      activeTabs.delete(roomID);
+    }
+  }
 
-  console.log(`[Leave] ${socketId.slice(-8)} (${userName}) left room ${roomID.slice(-8)}`);
+  console.log(`[LEAVE] ${socketId.slice(-8)} (${userName}) left room ${roomID.slice(-8)}`);
   
   setTimeout(() => cleanupRoom(roomID), 1000);
 }
 
 io.on('connection', (socket: Socket) => {
-  console.log(`[Connect] New connection: ${socket.id.slice(-8)}`);
+  console.log(`[CONNECT] New connection: ${socket.id.slice(-8)}`);
   
   setupTopologyHandlers(io, socket);
 
   socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string; tabId?: string }) => {
     const { room: roomID, userName, tabId } = config;
     
+    console.log(`[JOIN] Request from ${socket.id.slice(-8)} to room ${roomID?.slice(-8)}`);
+    
     if (!validate(roomID)) {
-      console.warn(`[Invalid] Room ID: ${roomID}`);
+      console.warn(`[ERROR] Invalid room ID: ${roomID}`);
       socket.emit('error', { message: 'Invalid room format' });
       return;
     }
-
-    // Проверка на несколько вкладок
-    const clientTabId = tabId || `tab_${Date.now()}`;
-    const existingTabs = roomTabs.get(roomID);
     
-    if (existingTabs) {
-      let isDuplicate = false;
-      for (const [existingSocketId, existingTabId] of existingTabs) {
-        if (existingTabId === clientTabId && existingSocketId !== socket.id) {
-          isDuplicate = true;
-          console.warn(`[Block] Duplicate tab detected: tabId=${clientTabId.slice(-8)} in room ${roomID.slice(-8)}`);
-          socket.emit('error', { message: 'You already have this room open in another tab. Please close it and try again.' });
-          return;
-        }
-      }
+    if (tabId && isDuplicateTab(roomID, socket.id, tabId)) {
+      console.warn(`[REJECT] Duplicate tab detected for room ${roomID.slice(-8)}, tabId: ${tabId}`);
+      socket.emit('error', { message: 'You already have this room open in another tab' });
+      return;
     }
-
-    // Сохраняем информацию о вкладке
-    if (!roomTabs.has(roomID)) {
-      roomTabs.set(roomID, new Map());
+    
+    if (tabId) {
+      registerTab(roomID, socket.id, tabId);
     }
-    roomTabs.get(roomID)!.set(socket.id, clientTabId);
 
     if (!allParticipants.has(roomID)) {
       allParticipants.set(roomID, new Set());
@@ -273,9 +289,8 @@ io.on('connection', (socket: Socket) => {
 
     const currentUserName = getUserName(roomID, socket.id);
     const participantsList = getAllParticipants(roomID);
-
-    // Записываем метрику времени входа
-    recordJoinMetric(socket.id, roomID, currentUserName);
+    
+    recordJoinStart(roomID, socket.id, currentUserName);
 
     io.to(roomID).emit('user-joined', {
       peerID: socket.id,
@@ -301,10 +316,12 @@ io.on('connection', (socket: Socket) => {
         userNumber: clientUserNumber,
         userName: clientUserName
       });
+      
+      recordConnectionComplete(roomID, clientID);
     });
 
     socket.join(roomID);
-    console.log(`[Join] ${socket.id.slice(-8)} (${currentUserName}) -> room ${roomID.slice(-8)} as #${userNumber}`);
+    console.log(`[JOIN] ${socket.id.slice(-8)} (${currentUserName}) joined room ${roomID.slice(-8)} as #${userNumber}`);
 
     if (!roomChats.has(roomID)) {
       roomChats.set(roomID, []);
@@ -320,11 +337,6 @@ io.on('connection', (socket: Socket) => {
         timestamp: topology.timestamp
       });
     }
-    
-    // Отмечаем, что соединение установлено (после отправки всех начальных данных)
-    setTimeout(() => {
-      markConnectionEstablished(socket.id);
-    }, 1000);
   });
 
   socket.on(ACTIONS.CHAT_MESSAGE, (data: {
@@ -401,7 +413,7 @@ io.on('connection', (socket: Socket) => {
       userName: currentUserName
     });
     
-    console.log(`[Name] ${socket.id.slice(-8)} -> ${currentUserName}`);
+    console.log(`[NAME] ${socket.id.slice(-8)} -> ${currentUserName}`);
   });
 
   socket.on(ACTIONS.RAISE_HAND, ({ roomID }: { roomID: string }) => {
@@ -414,7 +426,7 @@ io.on('connection', (socket: Socket) => {
       userName: userName
     });
     
-    console.log(`[Hand] ${socket.id.slice(-8)} raised hand in room ${roomID.slice(-8)}`);
+    console.log(`[HAND] ${socket.id.slice(-8)} raised hand in room ${roomID.slice(-8)}`);
   });
 
   socket.on(ACTIONS.LOWER_HAND, ({ roomID }: { roomID: string }) => {
@@ -427,7 +439,7 @@ io.on('connection', (socket: Socket) => {
       userName: userName
     });
     
-    console.log(`[Hand] ${socket.id.slice(-8)} lowered hand in room ${roomID.slice(-8)}`);
+    console.log(`[HAND] ${socket.id.slice(-8)} lowered hand in room ${roomID.slice(-8)}`);
   });
 
   socket.on(ACTIONS.REQUEST_CHAT_HISTORY, ({ roomID }: { roomID: string }) => {
@@ -495,7 +507,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('disconnecting', (reason) => {
-    console.log(`[Disconnecting] ${socket.id.slice(-8)}, reason: ${reason}`);
+    console.log(`[DISCONNECT] ${socket.id.slice(-8)} disconnecting, reason: ${reason}`);
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
@@ -508,9 +520,8 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    console.log(`[Disconnect] ${socket.id.slice(-8)}, reason: ${reason}`);
+    console.log(`[DISCONNECT] ${socket.id.slice(-8)} disconnected, reason: ${reason}`);
     messageCooldown.delete(socket.id);
-    joinMetrics.delete(socket.id);
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>
@@ -525,8 +536,9 @@ io.on('connection', (socket: Socket) => {
 
 server.listen(PORT, () => {
   console.log(`\n========================================`);
-  console.log(`[Server] Started on port ${PORT}`);
-  console.log(`[WebSocket] Ready for connections`);
-  console.log(`[Bandwidth] Topology recalculation interval: 10 seconds`);
+  console.log(`[SERVER] Started on port ${PORT}`);
+  console.log(`[CONFIG] Topology recalculation interval: 10 seconds`);
+  console.log(`[CONFIG] Tab duplication protection: ENABLED`);
+  console.log(`[CONFIG] Join metrics logging: ENABLED`);
   console.log(`========================================\n`);
 });

@@ -34,26 +34,25 @@ class BandwidthManager {
   private peerCapabilities: Map<string, Map<string, PeerCapability>> = new Map();
   private currentTopologies: Map<string, TopologyUpdate> = new Map();
   private updateIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private logCounters: Map<string, number> = new Map();
   
   private readonly STRONG_THRESHOLD = 2.5;
   private readonly WEAK_THRESHOLD = 1.0;
   private readonly RELAY_CAPABLE_THRESHOLD = 2.0;
   private readonly TOPOLOGY_RECALC_INTERVAL_MS = 10000;
   
-  // Для ограничения частоты логов
-  private lastLogTime: Map<string, number> = new Map();
-  
   initRoom(roomId: string): void {
     if (!this.peerReports.has(roomId)) {
       this.peerReports.set(roomId, new Map());
       this.peerCapabilities.set(roomId, new Map());
+      this.logCounters.set(roomId, 0);
       
       const interval = setInterval(() => {
         this.recalculateTopology(roomId);
       }, this.TOPOLOGY_RECALC_INTERVAL_MS);
       
       this.updateIntervals.set(roomId, interval);
-      console.log(`[Bandwidth] Room ${roomId.slice(-8)} initialized, interval ${this.TOPOLOGY_RECALC_INTERVAL_MS/1000}s`);
+      console.log(`[BWMGR] Room ${roomId.slice(-8)} initialized`);
     }
   }
   
@@ -66,8 +65,8 @@ class BandwidthManager {
     this.peerReports.delete(roomId);
     this.peerCapabilities.delete(roomId);
     this.currentTopologies.delete(roomId);
-    this.lastLogTime.delete(roomId);
-    console.log(`[Bandwidth] Room ${roomId.slice(-8)} cleaned up`);
+    this.logCounters.delete(roomId);
+    console.log(`[BWMGR] Room ${roomId.slice(-8)} cleaned up`);
   }
   
   addBandwidthReport(roomId: string, peerId: string, report: BandwidthReport): void {
@@ -88,23 +87,6 @@ class BandwidthManager {
     }
     
     this.updatePeerCapability(roomId, peerId);
-    
-    // Логируем скорость только при изменении или раз в 30 секунд
-    const now = Date.now();
-    const lastLog = this.lastLogTime.get(`${roomId}-${peerId}`) || 0;
-    if (now - lastLog > 30000) {
-      this.lastLogTime.set(`${roomId}-${peerId}`, now);
-      this.logPeerSpeed(roomId, peerId);
-    }
-  }
-  
-  private logPeerSpeed(roomId: string, peerId: string): void {
-    const cap = this.peerCapabilities.get(roomId)?.get(peerId);
-    if (cap && cap.uploadSpeed > 0) {
-      const shortId = peerId.slice(-8);
-      const type = cap.isRelayCapable ? 'RELAY' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? 'WEAK' : 'NORMAL');
-      console.log(`[Bandwidth] ${type} ${shortId}: upload=${cap.uploadSpeed.toFixed(2)}Mbps download=${cap.downloadSpeed.toFixed(2)}Mbps`);
-    }
   }
   
   private updatePeerCapability(roomId: string, peerId: string): void {
@@ -142,26 +124,28 @@ class BandwidthManager {
     return this.peerCapabilities.get(roomId) || new Map();
   }
   
-  private logRoomSummary(roomId: string): void {
+  private logSpeedUpdate(roomId: string): void {
     const participants = this.getRoomParticipants(roomId);
     if (participants.size === 0) return;
     
-    const summary: string[] = [];
-    for (const [peerId, cap] of participants) {
-      const shortId = peerId.slice(-8);
-      const type = cap.isRelayCapable ? 'R' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? 'W' : 'N');
-      summary.push(`${type}:${shortId} U=${cap.uploadSpeed.toFixed(1)} D=${cap.downloadSpeed.toFixed(1)}`);
+    const counter = (this.logCounters.get(roomId) || 0) + 1;
+    this.logCounters.set(roomId, counter);
+    
+    if (counter % 6 === 0) {
+      console.log(`[BWMGR] Room ${roomId.slice(-8)} speed summary (${participants.size} users):`);
+      for (const [peerId, cap] of participants) {
+        const shortId = peerId.slice(-8);
+        const type = cap.isRelayCapable ? 'RELAY' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? 'WEAK' : 'NORMAL');
+        console.log(`  ${type} ${shortId}: up=${cap.uploadSpeed.toFixed(2)}Mbps down=${cap.downloadSpeed.toFixed(2)}Mbps`);
+      }
     }
-    console.log(`[Bandwidth] Room ${roomId.slice(-8)} summary: ${summary.join(' | ')}`);
   }
   
   private recalculateTopology(roomId: string): void {
     const participants = this.getRoomParticipants(roomId);
     const allPeerIds = Array.from(participants.keys());
     
-    if (allPeerIds.length < 2) return;
-    
-    this.logRoomSummary(roomId);
+    this.logSpeedUpdate(roomId);
     
     if (allPeerIds.length < 3) {
       const edges: TopologyEdge[] = [];
@@ -174,7 +158,9 @@ class BandwidthManager {
         timestamp: Date.now()
       };
       this.currentTopologies.set(roomId, update);
-      console.log(`[Topology] Room ${roomId.slice(-8)}: P2P direct (${allPeerIds.length} participants)`);
+      if (allPeerIds.length === 2) {
+        console.log(`[TOPOLOGY] Room ${roomId.slice(-8)}: 2 users -> direct P2P`);
+      }
       return;
     }
     
@@ -229,10 +215,7 @@ class BandwidthManager {
           type: 'relay'
         });
         relayAssignments.set(weak.peerId, bestRelay.peerId);
-        
-        const weakShort = weak.peerId.slice(-8);
-        const relayShort = bestRelay.peerId.slice(-8);
-        console.log(`[Topology] Weak ${weakShort} -> relay ${relayShort}`);
+        console.log(`[TOPOLOGY] Room ${roomId.slice(-8)}: ${weak.peerId.slice(-8)} -> relay ${bestRelay.peerId.slice(-8)}`);
       }
     }
     
@@ -244,7 +227,9 @@ class BandwidthManager {
     
     this.currentTopologies.set(roomId, update);
     
-    console.log(`[Topology] Room ${roomId.slice(-8)}: strong=${strongPeers.length} weak=${weakPeers.length} relays=${relays.length} edges=${edges.length}`);
+    if (weakPeers.length > 0) {
+      console.log(`[TOPOLOGY] Room ${roomId.slice(-8)}: strong=${strongPeers.length} weak=${weakPeers.length} relays=${relays.length} edges=${edges.length}`);
+    }
   }
   
   getTopology(roomId: string): TopologyUpdate | null {

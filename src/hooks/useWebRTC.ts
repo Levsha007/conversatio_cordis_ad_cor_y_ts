@@ -196,7 +196,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         console.log('[Devices] Selected video:', defaultVideo.label || defaultVideo.deviceId);
       }
     } catch (err) {
-      console.error('Ошибка получения устройств:', err);
+      console.error('Error getting devices:', err);
     }
   }, [selectedAudioDevice, selectedVideoDevice]);
 
@@ -208,7 +208,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     
     try {
       const { isSupported, errors } = checkWebRTCAvailability();
-      if (!isSupported) throw new Error(`WebRTC не поддерживается: ${errors.join(', ')}`);
+      if (!isSupported) throw new Error(`WebRTC not supported: ${errors.join(', ')}`);
 
       if (localMediaStream.current) {
         localMediaStream.current.getTracks().forEach(track => track.stop());
@@ -246,9 +246,9 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         
         if (err instanceof Error) {
           if (err.name === 'NotAllowedError') {
-            setMediaError(new Error('Разрешите доступ к камере и микрофону в настройках браузера'));
+            setMediaError(new Error('Please allow camera and microphone access in browser settings'));
           } else if (err.name === 'NotFoundError') {
-            setMediaError(new Error('Не найдены камера или микрофон. Проверьте подключение устройств.'));
+            setMediaError(new Error('Camera or microphone not found. Check device connections.'));
           } else {
             setMediaError(err);
           }
@@ -293,9 +293,17 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
       if (roomID) {
         console.log('[Room] Joining:', roomID, 'as:', name);
+        
+        let tabId = sessionStorage.getItem('vc_tab_id');
+        if (!tabId) {
+          tabId = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+          sessionStorage.setItem('vc_tab_id', tabId);
+        }
+        
         socket.emit(ACTIONS.JOIN, { 
           room: roomID, 
-          userName: name || 'Участник'
+          userName: name || 'Participant',
+          tabId: tabId
         });
         
         setTimeout(() => requestTopology(), 2000);
@@ -524,37 +532,30 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
         screenShareStream.current = null;
       }
 
-      const videoConstraints: MediaTrackConstraints = {
-        frameRate: { ideal: 30, max: 60 }
-      };
-      
-      // Добавляем cursor отдельно через any, так как это расширенное свойство
-      const displayVideoConstraints: any = {
-        ...videoConstraints,
+      const videoConstraints: any = {
+        frameRate: { ideal: 30, max: 60 },
         cursor: "always"
       };
-      
+
       const displayMediaOptions: DisplayMediaStreamOptions = {
-        video: displayVideoConstraints,
+        video: videoConstraints,
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true
         }
       };
-      
+
       let displayStream: MediaStream;
       try {
         displayStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
         console.log('[ScreenShare] Display stream obtained, audio tracks:', displayStream.getAudioTracks().length);
       } catch (err) {
         console.warn('[ScreenShare] Could not get display with audio, retrying without audio:', err);
-        
         const fallbackVideoConstraints: any = {
           frameRate: { ideal: 30, max: 60 },
           cursor: "always"
         };
-        
         displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: fallbackVideoConstraints,
           audio: false
@@ -563,7 +564,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       
       const screenVideoTrack = displayStream.getVideoTracks()[0];
       if (!screenVideoTrack) {
-        throw new Error('Не удалось получить видео с экрана');
+        throw new Error('Failed to get screen video');
       }
 
       const newScreenStream = new MediaStream();
@@ -670,7 +671,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     } catch (err) {
       console.error('[ScreenShare] Error:', err);
       setMediaError(err as Error);
-      alert('Не удалось начать демонстрацию экрана. Проверьте разрешения.');
+      alert('Failed to start screen share. Please check permissions.');
       throw err;
     }
   }, [stopScreenShare]);
@@ -718,7 +719,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       await enumerateDevices();
       return true;
     } catch (err) {
-      console.error(`Ошибка переключения устройства ${type}:`, err);
+      console.error(`Error switching device ${type}:`, err);
       return false;
     }
   }, [enumerateDevices, mediaState]);
@@ -846,7 +847,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           socket.emit(ACTIONS.RELAY_SDP, { peerID, sessionDescription: answer });
         }
       } catch (err) {
-        console.error('Ошибка setRemoteDescription:', err);
+        console.error('Error setRemoteDescription:', err);
       }
     };
 

@@ -22,19 +22,19 @@ console.log('[Socket] Connecting to:', SOCKET_URL);
 const socket = io(SOCKET_URL, options) as Socket<ServerToClientEvents, ClientToServerEvents>;
 
 socket.on('connect', () => {
-  console.log('[Socket] ✅ Connected! ID:', socket.id);
+  console.log('[Socket] Connected, ID:', socket.id);
 });
 
 socket.on('connect_error', (err: Error) => {
-  console.error('[Socket] ❌ Connection error:', err.message);
+  console.error('[Socket] Connection error:', err.message);
 });
 
 socket.on('disconnect', (reason: string) => {
-  console.log('[Socket] ⚠️ Disconnected:', reason);
+  console.log('[Socket] Disconnected, reason:', reason);
 });
 
 (socket as any).on('reconnect', (attemptNumber: number) => {
-  console.log('[Socket] 🔄 Reconnected after', attemptNumber, 'attempts');
+  console.log('[Socket] Reconnected after', attemptNumber, 'attempts');
 });
 
 export default socket;
