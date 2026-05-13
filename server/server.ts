@@ -17,11 +17,18 @@ interface ChatMessage {
   userName?: string;
 }
 
+interface JoinMetrics {
+  socketId: string;
+  roomId: string;
+  joinRequestTime: number;
+  connectionEstablishedTime: number | null;
+  userName: string;
+}
+
 const app = express();
 const server = createServer(app);
 
 app.use((req, res, next) => {
-  // Разрешаем CORS для всех запросов
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -51,7 +58,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Добавляем простой эндпоинт для проверки работоспособности
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -81,6 +87,11 @@ const roomUserNames = new Map<string, Map<string, string>>();
 const allParticipants = new Map<string, Set<string>>();
 const messageCooldown = new Map<string, number>();
 
+// Хранилище для отслеживания вкладок: roomId -> Map<socketId, tabId>
+const roomTabs = new Map<string, Map<string, string>>();
+// Хранилище метрик времени входа: socketId -> JoinMetrics
+const joinMetrics = new Map<string, JoinMetrics>();
+
 function cleanupRoom(roomID: string): void {
   const room = io.sockets.adapter.rooms.get(roomID);
   if (!room || room.size === 0) {
@@ -88,6 +99,7 @@ function cleanupRoom(roomID: string): void {
     roomUserCounters.delete(roomID);
     roomUserNames.delete(roomID);
     allParticipants.delete(roomID);
+    roomTabs.delete(roomID);
     bandwidthManager.cleanupRoom(roomID);
     console.log(`[Cleanup] Room ${roomID.slice(-8)} cleared`);
   }
@@ -114,7 +126,7 @@ function getUserName(roomID: string, socketId: string): string {
   const userNames = roomUserNames.get(roomID)!;
   const userNumber = getUserNumber(roomID, socketId);
   
-  return userNames.get(socketId) || `Участник ${userNumber}`;
+  return userNames.get(socketId) || `Participant ${userNumber}`;
 }
 
 function setUserName(roomID: string, socketId: string, userName: string): void {
@@ -135,6 +147,26 @@ function getAllParticipants(roomID: string): Array<{ id: string; name: string; i
     name: getUserName(roomID, pid),
     isOnline: activeSockets.has(pid)
   }));
+}
+
+function recordJoinMetric(socketId: string, roomId: string, userName: string): void {
+  joinMetrics.set(socketId, {
+    socketId,
+    roomId,
+    joinRequestTime: Date.now(),
+    connectionEstablishedTime: null,
+    userName
+  });
+}
+
+function markConnectionEstablished(socketId: string): void {
+  const metric = joinMetrics.get(socketId);
+  if (metric && metric.connectionEstablishedTime === null) {
+    metric.connectionEstablishedTime = Date.now();
+    const elapsedMs = metric.connectionEstablishedTime - metric.joinRequestTime;
+    console.log(`[Metrics] Join completed: user=${metric.userName} room=${metric.roomId.slice(-8)} time=${elapsedMs}ms`);
+    joinMetrics.delete(socketId);
+  }
 }
 
 function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): void {
@@ -170,6 +202,15 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
     roomUserNames.get(roomID)!.delete(socketId);
   }
 
+  // Удаляем запись о вкладке
+  const tabs = roomTabs.get(roomID);
+  if (tabs) {
+    tabs.delete(socketId);
+    if (tabs.size === 0) {
+      roomTabs.delete(roomID);
+    }
+  }
+
   if (!isDisconnecting) {
     io.sockets.sockets.get(socketId)?.leave(roomID);
   }
@@ -182,20 +223,40 @@ function leaveRoom(roomID: string, socketId: string, isDisconnecting = false): v
 }
 
 io.on('connection', (socket: Socket) => {
-  console.log(`[Connect] New connection: ${socket.id.slice(-8)} from ${socket.handshake.address}`);
+  console.log(`[Connect] New connection: ${socket.id.slice(-8)}`);
   
   setupTopologyHandlers(io, socket);
 
-  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string }) => {
-    const { room: roomID, userName } = config;
-    
-    console.log(`[Join request] Socket ${socket.id.slice(-8)} to room ${roomID?.slice(-8)}`);
+  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string; tabId?: string }) => {
+    const { room: roomID, userName, tabId } = config;
     
     if (!validate(roomID)) {
       console.warn(`[Invalid] Room ID: ${roomID}`);
-      socket.emit('error', { message: 'Неверный формат комнаты' });
+      socket.emit('error', { message: 'Invalid room format' });
       return;
     }
+
+    // Проверка на несколько вкладок
+    const clientTabId = tabId || `tab_${Date.now()}`;
+    const existingTabs = roomTabs.get(roomID);
+    
+    if (existingTabs) {
+      let isDuplicate = false;
+      for (const [existingSocketId, existingTabId] of existingTabs) {
+        if (existingTabId === clientTabId && existingSocketId !== socket.id) {
+          isDuplicate = true;
+          console.warn(`[Block] Duplicate tab detected: tabId=${clientTabId.slice(-8)} in room ${roomID.slice(-8)}`);
+          socket.emit('error', { message: 'You already have this room open in another tab. Please close it and try again.' });
+          return;
+        }
+      }
+    }
+
+    // Сохраняем информацию о вкладке
+    if (!roomTabs.has(roomID)) {
+      roomTabs.set(roomID, new Map());
+    }
+    roomTabs.get(roomID)!.set(socket.id, clientTabId);
 
     if (!allParticipants.has(roomID)) {
       allParticipants.set(roomID, new Set());
@@ -207,11 +268,14 @@ io.on('connection', (socket: Socket) => {
     const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
     const userNumber = getUserNumber(roomID, socket.id);
 
-    const cleanUserName = userName ? sanitizeUserName(userName) : `Участник ${userNumber}`;
+    const cleanUserName = userName ? sanitizeUserName(userName) : `Participant ${userNumber}`;
     setUserName(roomID, socket.id, cleanUserName);
 
     const currentUserName = getUserName(roomID, socket.id);
     const participantsList = getAllParticipants(roomID);
+
+    // Записываем метрику времени входа
+    recordJoinMetric(socket.id, roomID, currentUserName);
 
     io.to(roomID).emit('user-joined', {
       peerID: socket.id,
@@ -240,7 +304,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.join(roomID);
-    console.log(`[Join] ${socket.id.slice(-8)} (${currentUserName}) → room ${roomID.slice(-8)} as #${userNumber}`);
+    console.log(`[Join] ${socket.id.slice(-8)} (${currentUserName}) -> room ${roomID.slice(-8)} as #${userNumber}`);
 
     if (!roomChats.has(roomID)) {
       roomChats.set(roomID, []);
@@ -256,6 +320,11 @@ io.on('connection', (socket: Socket) => {
         timestamp: topology.timestamp
       });
     }
+    
+    // Отмечаем, что соединение установлено (после отправки всех начальных данных)
+    setTimeout(() => {
+      markConnectionEstablished(socket.id);
+    }, 1000);
   });
 
   socket.on(ACTIONS.CHAT_MESSAGE, (data: {
@@ -332,7 +401,7 @@ io.on('connection', (socket: Socket) => {
       userName: currentUserName
     });
     
-    console.log(`[Name] ${socket.id.slice(-8)} → ${currentUserName}`);
+    console.log(`[Name] ${socket.id.slice(-8)} -> ${currentUserName}`);
   });
 
   socket.on(ACTIONS.RAISE_HAND, ({ roomID }: { roomID: string }) => {
@@ -441,6 +510,7 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', (reason) => {
     console.log(`[Disconnect] ${socket.id.slice(-8)}, reason: ${reason}`);
     messageCooldown.delete(socket.id);
+    joinMetrics.delete(socket.id);
     
     const rooms = Array.from(socket.rooms);
     const realRooms = rooms.filter(roomID =>

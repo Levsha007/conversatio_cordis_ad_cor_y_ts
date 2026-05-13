@@ -172,7 +172,7 @@ const DeviceSelection: React.FC<{
         {hasMediaError && (
           <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(255, 0, 0, 0.2)', borderRadius: '8px' }}>
             <p style={{ color: '#ff9999', fontWeight: 'bold' }}>
-              ⚠️ Не удалось получить доступ к медиаустройствам. Проверьте разрешения в браузере.
+              Не удалось получить доступ к медиаустройствам. Проверьте разрешения в браузере.
             </p>
           </div>
         )}
@@ -381,6 +381,9 @@ const Room: React.FC = () => {
   const { id: roomID } = useParams<{ id: string }>();
   useTabSync(roomID || '');
   const isMobile = useIsMobile();
+  
+  // Уникальный идентификатор вкладки для предотвращения дублирования
+  const tabId = useRef<string>(`tab_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`).current;
 
   const {
     clients,
@@ -566,6 +569,13 @@ const Room: React.FC = () => {
     setInitialMediaState(settings);
     await initializeMedia(settings, name);
     setDevicesInitialized(true);
+    
+    // Отправляем JOIN с tabId для предотвращения дублирования вкладок
+    socket.emit(ACTIONS.JOIN, { 
+      room: roomID || '',  
+      userName: name,
+      tabId: tabId
+    });
   };
 
   const toggleFullscreen = useCallback((clientID: string) => {
@@ -1088,7 +1098,7 @@ const Room: React.FC = () => {
                   {escapeHtml(getUserDisplayName(clientID))}
                 </div>
                 <div className={styles.participantStatus}>
-                  📹 Нет видео
+                  Нет видео
                 </div>
               </div>
             )}
@@ -1150,7 +1160,7 @@ const Room: React.FC = () => {
           onClick={handleExitFullscreen}
           title="Выйти из полноэкранного режима"
         >
-          ✕ Выйти из полноэкранного режима
+          Выйти из полноэкранного режима
         </button>
       )}
 

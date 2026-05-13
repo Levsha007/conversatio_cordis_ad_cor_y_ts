@@ -35,12 +35,13 @@ class BandwidthManager {
   private currentTopologies: Map<string, TopologyUpdate> = new Map();
   private updateIntervals: Map<string, NodeJS.Timeout> = new Map();
   
-  // Исправленные пороги для ваших данных (скорости 0.5-2.5 Mbps)
   private readonly STRONG_THRESHOLD = 2.5;
   private readonly WEAK_THRESHOLD = 1.0;
   private readonly RELAY_CAPABLE_THRESHOLD = 2.0;
-  
   private readonly TOPOLOGY_RECALC_INTERVAL_MS = 10000;
+  
+  // Для ограничения частоты логов
+  private lastLogTime: Map<string, number> = new Map();
   
   initRoom(roomId: string): void {
     if (!this.peerReports.has(roomId)) {
@@ -52,7 +53,7 @@ class BandwidthManager {
       }, this.TOPOLOGY_RECALC_INTERVAL_MS);
       
       this.updateIntervals.set(roomId, interval);
-      console.log(`[BandwidthManager] Room ${roomId.slice(-8)} initialized, recalculation every ${this.TOPOLOGY_RECALC_INTERVAL_MS/1000}s`);
+      console.log(`[Bandwidth] Room ${roomId.slice(-8)} initialized, interval ${this.TOPOLOGY_RECALC_INTERVAL_MS/1000}s`);
     }
   }
   
@@ -65,7 +66,8 @@ class BandwidthManager {
     this.peerReports.delete(roomId);
     this.peerCapabilities.delete(roomId);
     this.currentTopologies.delete(roomId);
-    console.log(`[BandwidthManager] Room ${roomId.slice(-8)} cleaned up`);
+    this.lastLogTime.delete(roomId);
+    console.log(`[Bandwidth] Room ${roomId.slice(-8)} cleaned up`);
   }
   
   addBandwidthReport(roomId: string, peerId: string, report: BandwidthReport): void {
@@ -86,15 +88,22 @@ class BandwidthManager {
     }
     
     this.updatePeerCapability(roomId, peerId);
-    this.logPeerSpeed(roomId, peerId);
+    
+    // Логируем скорость только при изменении или раз в 30 секунд
+    const now = Date.now();
+    const lastLog = this.lastLogTime.get(`${roomId}-${peerId}`) || 0;
+    if (now - lastLog > 30000) {
+      this.lastLogTime.set(`${roomId}-${peerId}`, now);
+      this.logPeerSpeed(roomId, peerId);
+    }
   }
   
   private logPeerSpeed(roomId: string, peerId: string): void {
     const cap = this.peerCapabilities.get(roomId)?.get(peerId);
     if (cap && cap.uploadSpeed > 0) {
       const shortId = peerId.slice(-8);
-      const status = cap.isRelayCapable ? '🚀' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? '🐢' : '•');
-      console.log(`[Speed] ${status} ${shortId}: ↑${cap.uploadSpeed.toFixed(2)}Mbps ↓${cap.downloadSpeed.toFixed(2)}Mbps`);
+      const type = cap.isRelayCapable ? 'RELAY' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? 'WEAK' : 'NORMAL');
+      console.log(`[Bandwidth] ${type} ${shortId}: upload=${cap.uploadSpeed.toFixed(2)}Mbps download=${cap.downloadSpeed.toFixed(2)}Mbps`);
     }
   }
   
@@ -137,17 +146,20 @@ class BandwidthManager {
     const participants = this.getRoomParticipants(roomId);
     if (participants.size === 0) return;
     
-    console.log(`\n[Room ${roomId.slice(-8)}] Speed summary (${participants.size} participants):`);
+    const summary: string[] = [];
     for (const [peerId, cap] of participants) {
       const shortId = peerId.slice(-8);
-      const status = cap.isRelayCapable ? '🚀' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? '🐢' : '•');
-      console.log(`  ${status} ${shortId}: ↑${cap.uploadSpeed.toFixed(2)}Mbps ↓${cap.downloadSpeed.toFixed(2)}Mbps`);
+      const type = cap.isRelayCapable ? 'R' : (cap.uploadSpeed < this.WEAK_THRESHOLD ? 'W' : 'N');
+      summary.push(`${type}:${shortId} U=${cap.uploadSpeed.toFixed(1)} D=${cap.downloadSpeed.toFixed(1)}`);
     }
+    console.log(`[Bandwidth] Room ${roomId.slice(-8)} summary: ${summary.join(' | ')}`);
   }
   
   private recalculateTopology(roomId: string): void {
     const participants = this.getRoomParticipants(roomId);
     const allPeerIds = Array.from(participants.keys());
+    
+    if (allPeerIds.length < 2) return;
     
     this.logRoomSummary(roomId);
     
@@ -162,7 +174,7 @@ class BandwidthManager {
         timestamp: Date.now()
       };
       this.currentTopologies.set(roomId, update);
-      console.log(`[Topology] Room ${roomId.slice(-8)}: ${allPeerIds.length} participants -> direct P2P only`);
+      console.log(`[Topology] Room ${roomId.slice(-8)}: P2P direct (${allPeerIds.length} participants)`);
       return;
     }
     
@@ -220,7 +232,7 @@ class BandwidthManager {
         
         const weakShort = weak.peerId.slice(-8);
         const relayShort = bestRelay.peerId.slice(-8);
-        console.log(`[Topology] Weak peer ${weakShort} → relay ${relayShort}`);
+        console.log(`[Topology] Weak ${weakShort} -> relay ${relayShort}`);
       }
     }
     
@@ -232,7 +244,7 @@ class BandwidthManager {
     
     this.currentTopologies.set(roomId, update);
     
-    console.log(`[Topology] Room ${roomId.slice(-8)}: ${strongPeers.length} strong, ${weakPeers.length} weak, ${relays.length} relays, ${edges.length} edges`);
+    console.log(`[Topology] Room ${roomId.slice(-8)}: strong=${strongPeers.length} weak=${weakPeers.length} relays=${relays.length} edges=${edges.length}`);
   }
   
   getTopology(roomId: string): TopologyUpdate | null {

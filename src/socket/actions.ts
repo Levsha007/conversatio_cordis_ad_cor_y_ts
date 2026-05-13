@@ -182,6 +182,7 @@ export interface ClientToServerEvents {
     room: string;
     userName?: string;
     hasMedia?: boolean;
+    tabId?: string;
   }) => void;
   [ACTIONS.RELAY_ICE]: (params: { 
     peerID: string; 
