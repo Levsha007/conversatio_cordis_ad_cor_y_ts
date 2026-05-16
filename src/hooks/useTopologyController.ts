@@ -1,7 +1,8 @@
 // src/hooks/useTopologyController.ts
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import socket from '../socket';
+import { ACTIONS } from '../socket/actions';
 
 export interface TopologyEdge {
   from: string;
@@ -30,18 +31,21 @@ export default function useTopologyController(localPeerId: string | null) {
   });
   
   const relayConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const relayStreams = useRef<Map<string, MediaStream>>(new Map());
   const [canBeRelay, setCanBeRelay] = useState<boolean>(false);
   
   const requestTopology = useCallback(() => {
     socket.emit('request-topology');
   }, []);
   
-  const handleTopologyUpdate = useCallback((data: any) => {
+  const syncFromTopologyUpdate = useCallback((data: {
+    edges?: TopologyEdge[];
+    relayAssignments?: [string, string][];
+    timestamp?: number;
+  }) => {
     const update: TopologyUpdate = {
       edges: data.edges || [],
       relayAssignments: data.relayAssignments || [],
-      timestamp: data.timestamp
+      timestamp: data.timestamp ?? Date.now()
     };
     
     setCurrentTopology(update);
@@ -49,8 +53,6 @@ export default function useTopologyController(localPeerId: string | null) {
     if (localPeerId) {
       const isDesignatedRelay = update.edges.some(
         edge => edge.type === 'relay' && edge.to === localPeerId
-      ) || update.edges.some(
-        edge => edge.type === 'relay' && edge.from === localPeerId
       );
       
       let assignedRelay: string | null = null;
@@ -68,7 +70,7 @@ export default function useTopologyController(localPeerId: string | null) {
       }));
     }
     
-    console.log('[Topology] Received update:', update);
+    console.log('[Topology] Synced update:', update);
   }, [localPeerId]);
   
   const createRelayConnection = useCallback(async (
@@ -92,7 +94,7 @@ export default function useTopologyController(localPeerId: string | null) {
     
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.emit('relay-ice', {
+        socket.emit(ACTIONS.RELAY_ICE, {
           peerID: targetPeerId,
           iceCandidate: event.candidate,
           isRelayForward: true,
@@ -104,7 +106,7 @@ export default function useTopologyController(localPeerId: string | null) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     
-    socket.emit('relay-sdp', {
+    socket.emit(ACTIONS.RELAY_SDP, {
       peerID: targetPeerId,
       sessionDescription: offer,
       isRelayForward: true,
@@ -170,21 +172,13 @@ export default function useTopologyController(localPeerId: string | null) {
     console.log(`[Topology] Configured as weak peer, assigned to relay ${relayPeerId}`);
   }, []);
   
-  useEffect(() => {
-    socket.on('topology-update', handleTopologyUpdate);
-    
-    return () => {
-      socket.off('topology-update', handleTopologyUpdate);
-      deactivateRelayMode();
-    };
-  }, [handleTopologyUpdate, deactivateRelayMode]);
-  
   return {
     currentTopology,
     relayState,
     canBeRelay,
     setCanBeRelay,
     requestTopology,
+    syncFromTopologyUpdate,
     activateRelayMode,
     deactivateRelayMode,
     configureAsWeakPeer,

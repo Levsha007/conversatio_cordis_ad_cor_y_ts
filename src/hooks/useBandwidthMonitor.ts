@@ -11,10 +11,8 @@ interface BandwidthMetrics {
   fractionLost: number;
 }
 
-interface PeerConnectionInfo {
-  peerId: string;
-  pc: RTCPeerConnection;
-}
+/** fractionLost есть в runtime (remote-inbound-rtp), но не во всех версиях lib.dom */
+type RemoteInboundRtpStats = RTCStats & { fractionLost?: number };
 
 export default function useBandwidthMonitor() {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -44,27 +42,36 @@ export default function useBandwidthMonitor() {
       let fractionLost = 0;
       let currentBytesReceived = 0;
       let currentBytesSent = 0;
-      let currentTimestamp = Date.now();
+      const currentTimestamp = Date.now();
       
       const lastStats = lastStatsRef.current.get(peerId);
       
       stats.forEach(report => {
-        if (report.type === 'inbound-rtp' && report.kind === 'video') {
-          currentBytesReceived = (report as any).bytesReceived || 0;
-          packetsLost = (report as any).packetsLost || 0;
-          fractionLost = (report as any).fractionLost || 0;
+        if (report.type === 'inbound-rtp' && (report.kind === 'video' || report.kind === 'audio')) {
+          const inbound = report as RTCInboundRtpStreamStats;
+          currentBytesReceived += inbound.bytesReceived || 0;
+          packetsLost += inbound.packetsLost || 0;
+        }
+
+        if (report.type === 'remote-inbound-rtp') {
+          const remoteInbound = report as RemoteInboundRtpStats;
+          if (remoteInbound.fractionLost != null) {
+            fractionLost = Math.max(fractionLost, remoteInbound.fractionLost);
+          }
         }
         
-        if (report.type === 'outbound-rtp' && report.kind === 'video') {
-          currentBytesSent = (report as any).bytesSent || 0;
+        if (report.type === 'outbound-rtp' && (report.kind === 'video' || report.kind === 'audio')) {
+          currentBytesSent += (report as RTCOutboundRtpStreamStats).bytesSent || 0;
         }
         
-        if (report.type === 'candidate-pair' && (report as any).nominated === true) {
-          rtt = (report as any).currentRtt || 0;
+        if (report.type === 'candidate-pair' && (report as RTCIceCandidatePairStats).nominated) {
+          const pairRtt = (report as RTCIceCandidatePairStats).currentRoundTripTime;
+          if (pairRtt && (!rtt || pairRtt < rtt)) {
+            rtt = pairRtt;
+          }
         }
       });
       
-      // Вычисляем битрейт на основе разницы с предыдущим замером
       if (lastStats && lastStats.timestamp > 0) {
         const timeDiff = (currentTimestamp - lastStats.timestamp) / 1000;
         if (timeDiff > 0) {
@@ -73,7 +80,6 @@ export default function useBandwidthMonitor() {
         }
       }
       
-      // Сохраняем текущие значения для следующего замера
       lastStatsRef.current.set(peerId, {
         bytesReceived: currentBytesReceived,
         bytesSent: currentBytesSent,
@@ -83,9 +89,9 @@ export default function useBandwidthMonitor() {
       return {
         inboundBps: Math.max(inboundBps, 0),
         outboundBps: Math.max(outboundBps, 0),
-        rtt: rtt || 0,
+        rtt: rtt ? Math.round(rtt * 1000) : 0,
         packetsLost,
-        fractionLost: fractionLost / 256
+        fractionLost
       };
     } catch (err) {
       console.error(`[BandwidthMonitor] Error getting stats for peer ${peerId.slice(-8)}:`, err);
@@ -95,22 +101,38 @@ export default function useBandwidthMonitor() {
   
   const collectAndSendStats = useCallback(async () => {
     const connections = Array.from(peerConnectionsRef.current.entries());
-    
+    if (connections.length === 0) return;
+
+    let totalInbound = 0;
+    let totalOutbound = 0;
+    let bestRtt = 0;
+    let hasMetrics = false;
+
     for (const [peerId, pc] of connections) {
       const stats = await getPeerStats(peerId, pc);
-      
-      if (stats) {
-        socket.emit('bandwidth-report', {
-          peerId,
-          inboundBps: Math.round(stats.inboundBps),
-          outboundBps: Math.round(stats.outboundBps),
-          rtt: stats.rtt
-        });
-        
-        if (stats.outboundBps > 100000 || stats.inboundBps > 100000) {
-          console.log(`[Bandwidth] ${peerId.slice(-8)}: ↑${(stats.outboundBps / 1e6).toFixed(2)}Mbps ↓${(stats.inboundBps / 1e6).toFixed(2)}Mbps`);
-        }
+      if (!stats) continue;
+
+      hasMetrics = true;
+      totalInbound += stats.inboundBps;
+      totalOutbound += stats.outboundBps;
+      if (stats.rtt > 0 && (!bestRtt || stats.rtt < bestRtt)) {
+        bestRtt = stats.rtt;
       }
+    }
+
+    if (!hasMetrics || !socket.id) return;
+
+    socket.emit('bandwidth-report', {
+      peerId: socket.id,
+      inboundBps: Math.round(totalInbound),
+      outboundBps: Math.round(totalOutbound),
+      rtt: bestRtt
+    });
+
+    if (totalOutbound > 100000 || totalInbound > 100000) {
+      console.log(
+        `[Bandwidth] ↑${(totalOutbound / 1e6).toFixed(2)}Mbps ↓${(totalInbound / 1e6).toFixed(2)}Mbps (${connections.length} peer(s))`
+      );
     }
   }, [getPeerStats]);
   

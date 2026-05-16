@@ -114,10 +114,11 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   } = useBandwidthMonitor();
   
   const {
-    relayState,
     setCanBeRelay,
     requestTopology,
+    syncFromTopologyUpdate,
     activateRelayMode,
+    deactivateRelayMode,
     configureAsWeakPeer
   } = useTopologyController(socket.id || null);
   
@@ -126,6 +127,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const [assignedRelayId, setAssignedRelayId] = useState<string | null>(null);
   
   const incomingStreams = useRef<Map<string, MediaStream>>(new Map());
+  const knownPeers = useRef<Set<string>>(new Set());
+  const pendingIceCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   
   const iceServers = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
@@ -150,6 +153,30 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       return list;
     }, cb);
   }, [updateClients]);
+
+  const closePeerConnection = useCallback((peerID: string) => {
+    const pc = peerConnections.current[peerID];
+    if (pc) {
+      pc.close();
+      delete peerConnections.current[peerID];
+      unregisterPeerConnection(peerID);
+      pendingIceCandidates.current.delete(peerID);
+      incomingStreams.current.delete(peerID);
+    }
+  }, [unregisterPeerConnection]);
+
+  const flushIceCandidates = useCallback(async (peerID: string, pc: RTCPeerConnection) => {
+    const pending = pendingIceCandidates.current.get(peerID) || [];
+    pendingIceCandidates.current.delete(peerID);
+
+    for (const candidate of pending) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn(`[Peer] Deferred ICE candidate failed for ${peerID.slice(-8)}:`, err);
+      }
+    }
+  }, []);
 
   const getMediaConstraints = useCallback((constraints: { audio: boolean; video: boolean }): MediaStreamConstraints => ({
     audio: constraints.audio ? {
@@ -321,15 +348,14 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
   const setupPeerConnection = useCallback(async (
     peerID: string, 
-    createOffer: boolean,
-    isRelayModeFlag: boolean = false
+    createOffer: boolean
   ) => {
     if (peerConnections.current[peerID]) {
       console.log(`[Peer] Connection for ${peerID.slice(-8)} already exists`);
       return;
     }
 
-    console.log(`[Peer] Setting up for ${peerID.slice(-8)}, createOffer: ${createOffer}, isRelay: ${isRelayModeFlag}`);
+    console.log(`[Peer] Setting up for ${peerID.slice(-8)}, createOffer: ${createOffer}`);
 
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const pcConfig: RTCConfiguration = {
@@ -352,7 +378,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
     console.log(`[Peer] Adding tracks to ${peerID.slice(-8)}: audio=${!!audioTrack}, video=${!!videoTrack}, screen=${mediaState.screen}`);
 
-    if (!isRelayModeFlag && activeStream) {
+    if (activeStream) {
       if (audioTrack && audioTrack.enabled) {
         pc.addTrack(audioTrack, localMediaStream.current!);
         console.log(`[Peer] Added audio track to ${peerID.slice(-8)}`);
@@ -419,27 +445,58 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
 
   const applyTopology = useCallback(async (edges: { from: string; to: string; type: string }[]) => {
     if (!socket.id) return;
-    
-    const relevantEdges = edges.filter(e => 
-      (e.from === socket.id && e.to !== LOCAL_VIDEO) || 
-      (e.to === socket.id && e.from !== LOCAL_VIDEO)
-    );
-    
-    for (const edge of relevantEdges) {
-      const peerId = edge.from === socket.id ? edge.to : edge.from;
-      
-      if (!peerConnections.current[peerId] && clients.includes(peerId)) {
-        const createOffer = edge.from === socket.id;
-        await setupPeerConnection(peerId, createOffer, edge.type === 'relay');
+
+    const allowedPeers = new Set<string>();
+    const connectionsToOpen: { peerId: string; createOffer: boolean }[] = [];
+
+    for (const edge of edges) {
+      if (edge.from === socket.id && edge.to !== LOCAL_VIDEO) {
+        allowedPeers.add(edge.to);
+        connectionsToOpen.push({ peerId: edge.to, createOffer: true });
+      } else if (edge.to === socket.id && edge.from !== LOCAL_VIDEO) {
+        allowedPeers.add(edge.from);
+        connectionsToOpen.push({ peerId: edge.from, createOffer: false });
       }
     }
-  }, [clients, setupPeerConnection]);
+
+    if (allowedPeers.size === 0 && knownPeers.current.size > 0) {
+      for (const peerId of knownPeers.current) {
+        allowedPeers.add(peerId);
+        connectionsToOpen.push({
+          peerId,
+          createOffer: socket.id < peerId
+        });
+      }
+    }
+
+    for (const peerId of Object.keys(peerConnections.current)) {
+      if (!allowedPeers.has(peerId)) {
+        closePeerConnection(peerId);
+        updateClients(list => list.filter(id => id !== peerId));
+        delete peerMediaElements.current[peerId];
+      }
+    }
+
+    for (const { peerId, createOffer } of connectionsToOpen) {
+      if (!peerConnections.current[peerId]) {
+        await setupPeerConnection(peerId, createOffer);
+      }
+    }
+  }, [setupPeerConnection, closePeerConnection, updateClients]);
 
   useEffect(() => {
     const handleTopologyUpdate = (data: { edges: any[]; relayAssignments: [string, string][] }) => {
       console.log('[WebRTC] Topology update received');
-      
+
+      syncFromTopologyUpdate(data);
+
+      setIsWeakMode(false);
+      setIsRelayMode(false);
+      setAssignedRelayId(null);
+
       if (socket.id) {
+        const weakPeersForRelay: string[] = [];
+
         for (const [weak, strong] of data.relayAssignments) {
           if (weak === socket.id) {
             setIsWeakMode(true);
@@ -448,11 +505,17 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
           }
           if (strong === socket.id) {
             setIsRelayMode(true);
-            activateRelayMode(incomingStreams.current, [weak]);
+            weakPeersForRelay.push(weak);
           }
         }
+
+        if (weakPeersForRelay.length > 0) {
+          activateRelayMode(incomingStreams.current, weakPeersForRelay);
+        } else {
+          deactivateRelayMode();
+        }
       }
-      
+
       applyTopology(data.edges);
     };
     
@@ -460,8 +523,9 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     
     return () => {
       socket.off('topology-update', handleTopologyUpdate);
+      deactivateRelayMode();
     };
-  }, [applyTopology, activateRelayMode, configureAsWeakPeer]);
+  }, [applyTopology, activateRelayMode, configureAsWeakPeer, syncFromTopologyUpdate, deactivateRelayMode]);
 
   const stopScreenShare = useCallback((): void => {
     console.log('[ScreenShare] Stopping...');
@@ -740,6 +804,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   const reconnect = useCallback(async () => {
     Object.values(peerConnections.current).forEach(pc => pc.close());
     peerConnections.current = {};
+    knownPeers.current.clear();
+    pendingIceCandidates.current.clear();
     if (localMediaStream.current) {
       localMediaStream.current.getTracks().forEach(track => track.stop());
       localMediaStream.current = null;
@@ -812,28 +878,44 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
   }, [participantSettings, mediaState.screen]);
 
   const toggleParticipantVideo = useCallback((peerId: string) => {
-    setParticipantSettings(prev => ({
-      ...prev,
-      [peerId]: { ...prev[peerId], videoEnabled: !(prev[peerId]?.videoEnabled ?? true) }
-    }));
-    const element = peerMediaElements.current[peerId];
-    if (element) {
-      element.style.display = participantSettings[peerId]?.videoEnabled ? 'none' : 'block';
-    }
-  }, [participantSettings]);
+    setParticipantSettings(prev => {
+      const videoEnabled = !(prev[peerId]?.videoEnabled ?? true);
+      const element = peerMediaElements.current[peerId];
+      if (element) {
+        element.style.display = videoEnabled ? 'block' : 'none';
+      }
+      return {
+        ...prev,
+        [peerId]: {
+          videoEnabled,
+          audioEnabled: prev[peerId]?.audioEnabled ?? true
+        }
+      };
+    });
+  }, []);
 
   const toggleParticipantAudio = useCallback((peerId: string) => {
-    setParticipantSettings(prev => ({
-      ...prev,
-      [peerId]: { ...prev[peerId], audioEnabled: !(prev[peerId]?.audioEnabled ?? true) }
-    }));
-    const element = peerMediaElements.current[peerId];
-    if (element) element.muted = !participantSettings[peerId]?.audioEnabled;
-  }, [participantSettings]);
+    setParticipantSettings(prev => {
+      const audioEnabled = !(prev[peerId]?.audioEnabled ?? true);
+      const element = peerMediaElements.current[peerId];
+      if (element) {
+        element.muted = !audioEnabled;
+      }
+      return {
+        ...prev,
+        [peerId]: {
+          videoEnabled: prev[peerId]?.videoEnabled ?? true,
+          audioEnabled
+        }
+      };
+    });
+  }, []);
 
   useEffect(() => {
-    const handleAddPeer = ({ peerID, createOffer }: any) => {
-      setupPeerConnection(peerID, createOffer);
+    const handleAddPeer = ({ peerID }: { peerID: string }) => {
+      knownPeers.current.add(peerID);
+      addNewClient(peerID);
+      requestTopology();
     };
 
     const handleSessionDescription = async ({ peerID, sessionDescription }: any) => {
@@ -841,6 +923,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       if (!pc) return;
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+        await flushIceCandidates(peerID, pc);
         if (sessionDescription.type === 'offer') {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -851,20 +934,26 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       }
     };
 
-    const handleIceCandidate = ({ peerID, iceCandidate }: any) => {
+    const handleIceCandidate = async ({ peerID, iceCandidate }: any) => {
       const pc = peerConnections.current[peerID];
-      if (pc) pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+      if (!pc || !pc.remoteDescription) {
+        const queue = pendingIceCandidates.current.get(peerID) || [];
+        queue.push(iceCandidate);
+        pendingIceCandidates.current.set(peerID, queue);
+        return;
+      }
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+      } catch (err) {
+        console.warn(`[Peer] ICE candidate error for ${peerID.slice(-8)}:`, err);
+      }
     };
 
     const handleRemovePeer = ({ peerID }: { peerID: string }) => {
-      const pc = peerConnections.current[peerID];
-      if (pc) {
-        pc.close();
-        delete peerConnections.current[peerID];
-        unregisterPeerConnection(peerID);
-        delete peerMediaElements.current[peerID];
-        updateClients(list => list.filter(c => c !== peerID));
-      }
+      knownPeers.current.delete(peerID);
+      closePeerConnection(peerID);
+      delete peerMediaElements.current[peerID];
+      updateClients(list => list.filter(c => c !== peerID));
     };
 
     const handleChatMessage = (msg: any) => {
@@ -892,7 +981,7 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
       socket.off(ACTIONS.REMOVE_PEER, handleRemovePeer);
       socket.off(ACTIONS.CHAT_MESSAGE, handleChatMessage);
     };
-  }, [setupPeerConnection, updateClients, addChatMessage, unregisterPeerConnection]);
+  }, [addNewClient, requestTopology, flushIceCandidates, closePeerConnection, updateClients, addChatMessage]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -920,6 +1009,8 @@ export default function useWebRTC(roomID?: string): UseWebRTCReturn {
     return () => {
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
+      knownPeers.current.clear();
+      pendingIceCandidates.current.clear();
       stopMonitoring();
       if (localMediaStream.current) {
         localMediaStream.current.getTracks().forEach(track => track.stop());

@@ -5,7 +5,7 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4, validate, version } from 'uuid';
 
 import { ACTIONS, sanitizeUserName, sanitizeMessage, validateRoomID } from './socket/actions';
-import { setupTopologyHandlers, TOPOLOGY_EVENTS } from './socket/topology-handler';
+import { setupTopologyHandlers, setupTopologyBroadcast, TOPOLOGY_EVENTS } from './socket/topology-handler';
 import { bandwidthManager } from './bandwidth-manager';
 
 interface ChatMessage {
@@ -80,6 +80,8 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3001;
+
+setupTopologyBroadcast(io);
 
 const roomChats = new Map<string, ChatMessage[]>();
 const roomUserCounters = new Map<string, number>();
@@ -253,7 +255,7 @@ io.on('connection', (socket: Socket) => {
   
   setupTopologyHandlers(io, socket);
 
-  socket.on(ACTIONS.JOIN, (config: { room: string; userName?: string; tabId?: string }) => {
+  socket.on(ACTIONS.JOIN, async (config: { room: string; userName?: string; tabId?: string }) => {
     const { room: roomID, userName, tabId } = config;
     
     console.log(`[JOIN] Request from ${socket.id.slice(-8)} to room ${roomID?.slice(-8)}`);
@@ -280,8 +282,13 @@ io.on('connection', (socket: Socket) => {
     allParticipants.get(roomID)!.add(socket.id);
 
     bandwidthManager.initRoom(roomID);
+    bandwidthManager.registerPeer(roomID, socket.id);
 
-    const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
+    await socket.join(roomID);
+
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || [])
+      .filter(clientID => clientID !== socket.id);
+
     const userNumber = getUserNumber(roomID, socket.id);
 
     const cleanUserName = userName ? sanitizeUserName(userName) : `Participant ${userNumber}`;
@@ -312,7 +319,7 @@ io.on('connection', (socket: Socket) => {
       
       socket.emit(ACTIONS.ADD_PEER, {
         peerID: clientID,
-        createOffer: true,
+        createOffer: false,
         userNumber: clientUserNumber,
         userName: clientUserName
       });
@@ -320,7 +327,8 @@ io.on('connection', (socket: Socket) => {
       recordConnectionComplete(roomID, clientID);
     });
 
-    socket.join(roomID);
+    bandwidthManager.recalculateTopology(roomID);
+
     console.log(`[JOIN] ${socket.id.slice(-8)} (${currentUserName}) joined room ${roomID.slice(-8)} as #${userNumber}`);
 
     if (!roomChats.has(roomID)) {
@@ -328,15 +336,6 @@ io.on('connection', (socket: Socket) => {
     }
 
     socket.emit(ACTIONS.CHAT_HISTORY, roomChats.get(roomID) || []);
-    
-    const topology = bandwidthManager.getTopology(roomID);
-    if (topology) {
-      socket.emit(TOPOLOGY_EVENTS.TOPOLOGY_UPDATE, {
-        edges: topology.edges,
-        relayAssignments: Array.from(topology.relayAssignments.entries()),
-        timestamp: topology.timestamp
-      });
-    }
   });
 
   socket.on(ACTIONS.CHAT_MESSAGE, (data: {

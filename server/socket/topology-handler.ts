@@ -18,13 +18,26 @@ interface BandwidthReportPayload {
   rtt: number;
 }
 
+export function emitTopologyUpdate(io: Server, roomId: string, topology: TopologyUpdate): void {
+  io.to(roomId).emit(TOPOLOGY_EVENTS.TOPOLOGY_UPDATE, {
+    edges: topology.edges,
+    relayAssignments: Array.from(topology.relayAssignments.entries()),
+    timestamp: topology.timestamp
+  });
+}
+
+export function setupTopologyBroadcast(io: Server): void {
+  bandwidthManager.setTopologyBroadcast((roomId, topology) => {
+    emitTopologyUpdate(io, roomId, topology);
+  });
+}
+
 /**
  * Настройка обработчиков топологии для сокета
  */
 export function setupTopologyHandlers(io: Server, socket: Socket): void {
   const rooms = new Set<string>();
   
-  // Отслеживаем комнаты, в которые входит пользователь
   const originalJoin = socket.join.bind(socket);
   socket.join = function(room: string) {
     rooms.add(room);
@@ -32,11 +45,8 @@ export function setupTopologyHandlers(io: Server, socket: Socket): void {
     return originalJoin(room);
   };
   
-  /**
-   * Получение отчёта о пропускной способности
-   */
   socket.on(TOPOLOGY_EVENTS.BANDWIDTH_REPORT, (data: BandwidthReportPayload) => {
-    const { peerId, inboundBps, outboundBps, rtt } = data;
+    const { inboundBps, outboundBps, rtt } = data;
     
     for (const roomId of rooms) {
       const room = io.sockets.adapter.rooms.get(roomId);
@@ -50,23 +60,11 @@ export function setupTopologyHandlers(io: Server, socket: Socket): void {
         };
         
         bandwidthManager.addBandwidthReport(roomId, socket.id, report);
-        
-        const topology = bandwidthManager.getTopology(roomId);
-        if (topology) {
-          io.to(roomId).emit(TOPOLOGY_EVENTS.TOPOLOGY_UPDATE, {
-            edges: topology.edges,
-            relayAssignments: Array.from(topology.relayAssignments.entries()),
-            timestamp: topology.timestamp
-          });
-        }
         break;
       }
     }
   });
   
-  /**
-   * Запрос текущей топологии
-   */
   socket.on(TOPOLOGY_EVENTS.REQUEST_TOPOLOGY, () => {
     for (const roomId of rooms) {
       const topology = bandwidthManager.getTopology(roomId);
@@ -81,9 +79,6 @@ export function setupTopologyHandlers(io: Server, socket: Socket): void {
     }
   });
   
-  /**
-   * Участник готов стать ретранслятором
-   */
   socket.on(TOPOLOGY_EVENTS.BECOME_RELAY, () => {
     for (const roomId of rooms) {
       console.log(`[Relay] ${socket.id.slice(-8)} ready to become relay in room ${roomId.slice(-8)}`);
@@ -98,9 +93,6 @@ export function setupTopologyHandlers(io: Server, socket: Socket): void {
     }
   });
   
-  /**
-   * Участник больше не ретранслятор
-   */
   socket.on(TOPOLOGY_EVENTS.STOP_RELAY, () => {
     for (const roomId of rooms) {
       bandwidthManager.addBandwidthReport(roomId, socket.id, {
@@ -114,9 +106,6 @@ export function setupTopologyHandlers(io: Server, socket: Socket): void {
     }
   });
   
-  /**
-   * При отключении очищаем данные
-   */
   socket.on('disconnect', () => {
     for (const roomId of rooms) {
       bandwidthManager.removePeer(roomId, socket.id);
